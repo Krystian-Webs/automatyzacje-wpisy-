@@ -1,0 +1,146 @@
+[
+  {
+    "focus": "tworzenie stron internetowych wordpress",
+    "related": ["projektowanie stron www", "strony wordpress polska", "jak stworzyć stronę wordpress"],
+    "type": "poradnik",
+    "length": 1800
+  },
+  {
+    "focus": "sklep internetowy woocommerce",
+    "related": ["jak założyć sklep online", "woocommerce koszty", "sklep wordpress"],
+    "type": "poradnik",
+    "length": 2000
+  },
+  {
+    "focus": "ile kosztuje strona internetowa",
+    "related": ["ceny stron www", "koszt strony wordpress", "wycena strony internetowej"],
+    "type": "lista",
+    "length": 1600
+  },
+  {
+    "focus": "pozycjonowanie stron internetowych",
+    "related": ["seo wordpress", "jak pozycjonować stronę", "optymalizacja seo"],
+    "type": "poradnik",
+    "length": 1800
+  },
+  {
+    "focus": "strona internetowa dla firmy",
+    "related": ["strona firmowa wordpress", "wizytówka internetowa", "strona www dla małej firmy"],
+    "type": "poradnik",
+    "length": 1600
+  },
+  {
+    "focus": "landing page co to jest",
+    "related": ["strona one page", "landing page wordpress", "jak zrobić landing page"],
+    "type": "faq",
+    "length": 1400
+  },
+  {
+    "focus": "responsywna strona internetowa",
+    "related": ["strona mobilna", "rwd design", "strona na telefon"],
+    "type": "poradnik",
+    "length": 1500
+  },
+  {
+    "focus": "wordpress czy woocommerce",
+    "related": ["wordpress do sklepu", "woocommerce opinie", "najlepszy cms sklep"],
+    "type": "porownanie",
+    "length": 1800
+  },
+  {
+    "focus": "jak wybrać firmę do tworzenia stron",
+    "related": ["agencja webdesign", "freelancer strony www", "jak wybrać webdesignera"],
+    "type": "lista",
+    "length": 1600
+  },
+  {
+    "focus": "optymalizacja prędkości strony wordpress",
+    "related": ["core web vitals", "pagespeed wordpress", "szybka strona wordpress"],
+    "type": "poradnik",
+    "length": 2000
+  },
+  {
+    "focus": "certyfikat ssl strona internetowa",
+    "related": ["https wordpress", "bezpieczna strona www", "ssl co to jest"],
+    "type": "faq",
+    "length": 1400
+  },
+  {
+    "focus": "seo lokalne dla firm",
+    "related": ["google moja firma", "pozycjonowanie lokalne", "wizytówka google"],
+    "type": "lokalne",
+    "length": 1800
+  },
+  {
+    "focus": "elementor pro wordpress",
+    "related": ["kreator stron wordpress", "page builder", "elementor vs gutenberg"],
+    "type": "porownanie",
+    "length": 1600
+  },
+  {
+    "focus": "blog wordpress jak zacząć",
+    "related": ["zakładanie bloga", "wordpress blog darmowy", "jak pisać bloga seo"],
+    "type": "poradnik",
+    "length": 1800
+  },
+  {
+    "focus": "sklep internetowy płatności online",
+    "related": ["przelewy24 woocommerce", "payu sklep", "blik płatności sklep"],
+    "type": "poradnik",
+    "length": 1600
+  },
+  {
+    "focus": "strona internetowa fotografia",
+    "related": ["portfolio fotografa", "strona www fotograf", "jak zrobić portfolio online"],
+    "type": "poradnik",
+    "length": 1500
+  },
+  {
+    "focus": "google analytics 4 wordpress",
+    "related": ["ga4 instalacja", "statystyki strony wordpress", "jak sprawdzić ruch na stronie"],
+    "type": "poradnik",
+    "length": 1600
+  },
+  {
+    "focus": "strona internetowa restauracji",
+    "related": ["menu online restauracja", "strona www gastronomia", "wordpress restauracja"],
+    "type": "lokalne",
+    "length": 1500
+  },
+  {
+    "focus": "rank math seo wordpress",
+    "related": ["wtyczka seo wordpress", "rank math vs yoast", "jak ustawić seo wordpress"],
+    "type": "porownanie",
+    "length": 1800
+  },
+  {
+    "focus": "strona internetowa dla gabinetu",
+    "related": ["strona www lekarza", "gabinet psychologiczny strona", "strona kosmetyczki"],
+    "type": "lokalne",
+    "length": 1500
+  },
+  {
+    "focus": "jak działa pozycjonowanie w google",
+    "related": ["algorytm google", "seo dla początkujących", "jak dostać się na pierwszą stronę google"],
+    "type": "faq",
+    "length": 1800
+  },
+  {
+    "focus": "strona internetowa biuro nieruchomości",
+    "related": ["wordpress nieruchomości", "wtyczka nieruchomości", "strona agencja nieruchomości"],
+    "type": "lokalne",
+    "length": 1500
+  },
+  {
+    "focus": "wtyczki wordpress niezbędne",
+    "related": ["najlepsze wtyczki wordpress", "wordpress plugins 2025", "obowiązkowe wtyczki wp"],
+    "type": "lista",
+    "length": 2000
+  },
+  {
+    "focus": "hosting wordpress jaki wybrać",
+    "related": ["najlepszy hosting polska", "serwer wordpress", "hosting rekomendacje"],
+    "type": "lista",
+    "length": 1800
+  }
+]
