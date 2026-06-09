@@ -1,0 +1,44 @@
+name: Auto SEO Blog Post
+
+on:
+  schedule:
+    - cron: '0 7 * * 2'
+    - cron: '0 7 * * 4'
+    - cron: '0 7 * * 6'
+  workflow_dispatch:
+
+jobs:
+  publish-seo-post:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Pobierz kod
+        uses: actions/checkout@v4
+
+      - name: Ustaw Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Zainstaluj zaleznosci
+        run: pip install requests
+
+      - name: Generuj i publikuj wpis SEO
+        env:
+          WP_URL:         ${{ secrets.WP_URL }}
+          WP_USER:        ${{ secrets.WP_USER }}
+          WP_PASSWORD:    ${{ secrets.WP_PASSWORD }}
+          CLAUDE_KEY:     ${{ secrets.CLAUDE_KEY }}
+          WP_CATEGORY_ID: ${{ secrets.WP_CATEGORY_ID }}
+          POST_STATUS:    ${{ secrets.POST_STATUS }}
+        run: python dw-seo-autoposter/post.py
+
+      - name: Zapisz historie slow kluczowych
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add dw-seo-autoposter/keywords/used.json || true
+          git diff --staged --quiet || git commit -m "chore: aktualizuj historie [skip ci]"
+          git push || true
