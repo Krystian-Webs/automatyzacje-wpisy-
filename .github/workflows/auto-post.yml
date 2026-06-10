@@ -27,12 +27,13 @@ jobs:
 
       - name: Generuj i publikuj wpis SEO
         env:
-          WP_URL:         ${{ secrets.WP_URL }}
-          WP_USER:        ${{ secrets.WP_USER }}
-          WP_PASSWORD:    ${{ secrets.WP_PASSWORD }}
-          CLAUDE_KEY:     ${{ secrets.CLAUDE_KEY }}
-          WP_CATEGORY_ID: ${{ secrets.WP_CATEGORY_ID }}
-          POST_STATUS:    ${{ secrets.POST_STATUS }}
+          WP_URL:          ${{ secrets.WP_URL }}
+          WP_USER:         ${{ secrets.WP_USER }}
+          WP_PASSWORD:     ${{ secrets.WP_PASSWORD }}
+          CLAUDE_KEY:      ${{ secrets.CLAUDE_KEY }}
+          WP_CATEGORY_ID:  ${{ secrets.WP_CATEGORY_ID }}
+          POST_STATUS:     ${{ secrets.POST_STATUS }}
+          UNSPLASH_KEY:    ${{ secrets.UNSPLASH_KEY }}
         run: python dw-seo-autoposter/post.py
 
       - name: Zapisz historie slow kluczowych
