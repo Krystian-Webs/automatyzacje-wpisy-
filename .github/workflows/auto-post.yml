@@ -23,7 +23,12 @@ jobs:
           python-version: '3.11'
 
       - name: Zainstaluj zaleznosci
-        run: pip install requests
+        run: pip install requests google-auth google-api-python-client
+
+      - name: Test GSC
+        env:
+          GSC_SERVICE_ACCOUNT: ${{ secrets.GSC_SERVICE_ACCOUNT }}
+        run: python dw-seo-autoposter/test_gsc.py
 
       - name: Generuj i publikuj wpis SEO
         env:
@@ -34,6 +39,7 @@ jobs:
           WP_CATEGORY_ID:  ${{ secrets.WP_CATEGORY_ID }}
           POST_STATUS:     ${{ secrets.POST_STATUS }}
           UNSPLASH_KEY:    ${{ secrets.UNSPLASH_KEY }}
+          GSC_SERVICE_ACCOUNT: ${{ secrets.GSC_SERVICE_ACCOUNT }}
         run: python dw-seo-autoposter/post.py
 
       - name: Zapisz historie slow kluczowych
