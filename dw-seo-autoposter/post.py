@@ -289,6 +289,31 @@ def upload_image_to_wordpress(image_url, alt_text, title, photographer="", photo
         print(f"[{now()}] Blad wgrywania zdjecia: {e}")
         return None, None
 
+def notify_google_indexing(post_url):
+    """Zgłasza nowy URL do Google Indexing API."""
+    if not GSC_JSON:
+        print(f"[{now()}] Brak GSC_SERVICE_ACCOUNT, pomijam Indexing API")
+        return
+
+    try:
+        creds_data = json.loads(GSC_JSON)
+        creds = service_account.Credentials.from_service_account_info(
+            creds_data,
+            scopes=["https://www.googleapis.com/auth/indexing"]
+        )
+        service = build("indexing", "v3", credentials=creds)
+
+        response = service.urlNotifications().publish(
+            body={"url": post_url, "type": "URL_UPDATED"}
+        ).execute()
+
+        print(f"[{now()}] Google Indexing API OK — {post_url}")
+        print(f"[{now()}] Odpowiedz: {response}")
+    except Exception as e:
+        import traceback
+        print(f"[{now()}] Blad Indexing API: {e}")
+        print(traceback.format_exc())
+
 def set_rank_math_seo(post_id, keywords, title, description):
     try:
         res = requests.post(
@@ -467,6 +492,7 @@ def main():
     seo_title = article["title"][:60]
     seo_desc = article["meta_description"][:160]
     set_rank_math_seo(post_id, article["all_keywords"], seo_title, seo_desc)
+    notify_google_indexing(post_url)
 
     print(f"\n{'='*50}")
     print(f"SUKCES!")
