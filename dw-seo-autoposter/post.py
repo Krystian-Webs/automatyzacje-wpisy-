@@ -45,6 +45,54 @@ def load_keywords():
     
     return chosen
 
+def extract_json(text):
+    """Wyciąga i parsuje JSON z tekstu — obsługuje wieloliniowy JSON."""
+    # Usuń markdown
+    text = re.sub(r'```json\s*', '', text)
+    text = re.sub(r'```\s*', '', text)
+    text = text.strip()
+
+    # Znajdź zakres JSON
+    start = text.find('{')
+    if start == -1:
+        raise ValueError(f"Brak {{ w odpowiedzi: {text[:200]}")
+    
+    # Zlicz nawiasy żeby znaleźć właściwy koniec
+    depth = 0
+    end = -1
+    in_string = False
+    escape = False
+    
+    for i, ch in enumerate(text[start:], start):
+        if escape:
+            escape = False
+            continue
+        if ch == '\\' and in_string:
+            escape = True
+            continue
+        if ch == '"' and not escape:
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch == '{':
+            depth += 1
+        elif ch == '}':
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                break
+    
+    if end == -1:
+        raise ValueError(f"Niedomknięty JSON, depth={depth}")
+    
+    json_str = text[start:end]
+    
+    try:
+        return json.loads(json_str)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"JSONDecodeError: {e}")
+
 def generate_article(kw_data):
     focus    = kw_data["focus"]
     related  = ", ".join(kw_data.get("related", []))
@@ -65,27 +113,25 @@ Kontekst: DirectWebs tworzy strony WordPress i sklepy WooCommerce. Autor: Krysti
 Napisz {type_desc} (~{length} słów) zoptymalizowany pod frazy: {focus}, {related}
 Focus keyword: "{focus}"
 
-WAŻNE: Zwróć WYŁĄCZNIE surowy JSON. Bez markdown. Bez backticks. Bez tekstu przed ani po. Zacznij od {{ i zakończ na }}.
+Zwróć TYLKO i WYŁĄCZNIE JSON w tym formacie (bez żadnego tekstu przed ani po):
 
 {{
-  "title": "tytuł SEO z focus keyword, max 60 znaków",
+  "title": "tytuł SEO z focus keyword max 60 znaków",
   "slug": "slug-bez-polskich-znakow",
   "meta_description": "meta opis 140-155 znaków z CTA",
   "focus_keyword": "{focus}",
-  "content": "PELNA TRESC HTML - wszystkie tagi HTML muszą być w jednej linii bez łamania"
+  "content": "CAŁA TREŚĆ HTML TUTAJ"
 }}
 
-Wymagania dla content (CAŁY content musi być w jednej linii JSON - użyj \\n zamiast nowych linii):
+Wymagania dla content:
 - H2 i H3 z wariantami frazy kluczowej
 - Pierwsze 100 słów zawiera focus keyword
 - Gęstość słowa kluczowego 1-1.5%
 - Min 5 sekcji H2
-- Sekcja FAQ na końcu (min 5 pytań jako h3 + p)
-- Link wewnętrzny do: https://directwebs.pl/skontaktuj-sie-porozmawiajmy-o-twoim-projekcie/
-- Zakończ mocnym CTA do kontaktu
-- strong przy ważnych pojęciach
-- ul/ol gdzie pasuje
-- Naturalny polski, bez sztucznego upychania fraz"""
+- Sekcja FAQ na końcu min 5 pytań
+- Link: <a href="https://directwebs.pl/skontaktuj-sie-porozmawiajmy-o-twoim-projekcie/">bezpłatna wycena</a>
+- Zakończ CTA do kontaktu
+- Naturalny polski"""
 
     headers = {
         "x-api-key": CLAUDE_KEY,
@@ -98,32 +144,15 @@ Wymagania dla content (CAŁY content musi być w jednej linii JSON - użyj \\n z
         "messages": [{"role": "user", "content": prompt}],
     }
 
-    print(f"[{now()}] 🤖 Wysyłam prompt do Claude API...")
+    print(f"[{now()}] Wysylam prompt do Claude API...")
     res = requests.post("https://api.anthropic.com/v1/messages", headers=headers, json=body)
     res.raise_for_status()
 
     raw = res.json()["content"][0]["text"]
-    print(f"[{now()}] 📥 Odpowiedź Claude (pierwsze 300 znaków): {raw[:300]}")
+    print(f"[{now()}] Odpowiedz Claude ({len(raw)} znakow), pierwsze 150: {raw[:150]}")
 
-    # Usuń markdown code blocks
-    raw = re.sub(r'```json\s*', '', raw)
-    raw = re.sub(r'```\s*', '', raw)
-    raw = raw.strip()
-
-    # Znajdź początek i koniec JSON
-    start = raw.find('{')
-    end = raw.rfind('}') + 1
-    if start == -1 or end == 0:
-        raise ValueError(f"Brak JSON w odpowiedzi: {raw[:200]}")
-
-    json_str = raw[start:end]
-
-    try:
-        article = json.loads(json_str)
-    except json.JSONDecodeError as e:
-        raise ValueError(f"Błąd parsowania JSON: {e}")
-
-    print(f"[{now()}] ✅ Artykuł wygenerowany: {article['title']}")
+    article = extract_json(raw)
+    print(f"[{now()}] Artykul wygenerowany: {article['title']}")
     return article
 
 def publish_to_wordpress(article):
@@ -133,7 +162,7 @@ def publish_to_wordpress(article):
         "Content-Type": "application/json",
     }
 
-    print(f"[{now()}] 📤 Publikuję na WordPress ({WP_URL})...")
+    print(f"[{now()}] Publikuje na WordPress ({WP_URL})...")
     body = {
         "title":      article["title"],
         "slug":       article["slug"],
@@ -147,21 +176,21 @@ def publish_to_wordpress(article):
     res.raise_for_status()
     post = res.json()
     post_id = post["id"]
-    print(f"[{now()}] ✅ Wpis utworzony (ID: {post_id})")
+    print(f"[{now()}] Wpis utworzony ID: {post_id}")
 
-    print(f"[{now()}] 🏷️  Ustawiam Rank Math SEO...")
+    print(f"[{now()}] Ustawiam Rank Math SEO...")
     meta = {
         "meta": {
             "rank_math_focus_keyword":        article.get("focus_keyword", ""),
             "rank_math_description":           article.get("meta_description", ""),
-            "rank_math_title":                 article["title"] + " — DirectWebs",
+            "rank_math_title":                 article["title"] + " - DirectWebs",
             "rank_math_robots":                ["index", "follow"],
             "rank_math_rich_snippet":          "article",
             "rank_math_snippet_article_type":  "BlogPosting",
         }
     }
     requests.post(f"{WP_URL}/wp-json/wp/v2/posts/{post_id}", headers=headers, json=meta)
-    print(f"[{now()}] ✅ Rank Math ustawiony")
+    print(f"[{now()}] Rank Math ustawiony")
 
     return post_id, post.get("link", "")
 
@@ -170,19 +199,19 @@ def now():
 
 def main():
     print(f"\n{'='*50}")
-    print(f"DirectWebs Auto SEO Poster — {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    print(f"DirectWebs Auto SEO Poster - {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     print(f"{'='*50}\n")
 
-    print(f"[{now()}] 🔍 Wybieram słowo kluczowe...")
+    print(f"[{now()}] Wybieram slowo kluczowe...")
     kw_data = load_keywords()
-    print(f"[{now()}] ✅ Wybrano: {kw_data['focus']}")
+    print(f"[{now()}] Wybrano: {kw_data['focus']}")
 
     article = generate_article(kw_data)
     post_id, post_url = publish_to_wordpress(article)
 
     print(f"\n{'='*50}")
-    print(f"✅ SUKCES!")
-    print(f"Tytuł:    {article['title']}")
+    print(f"SUKCES!")
+    print(f"Tytul:    {article['title']}")
     print(f"Keyword:  {article['focus_keyword']}")
     print(f"Post ID:  {post_id}")
     print(f"URL:      {post_url}")
