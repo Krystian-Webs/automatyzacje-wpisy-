@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-DirectWebs — Auto SEO Blog Post Generator v2
+DirectWebs — Auto SEO Blog Post Generator v3
 Pelna optymalizacja Rank Math 80+/100
 """
 
@@ -19,8 +19,8 @@ CLAUDE_KEY    = os.environ["CLAUDE_KEY"]
 UNSPLASH_KEY  = os.environ.get("UNSPLASH_KEY", "")
 WP_CATEGORY   = int(os.environ.get("WP_CATEGORY_ID", "1"))
 POST_STATUS   = os.environ.get("POST_STATUS", "publish")
+DW_TOKEN      = "directwebs2026"
 
-# Strony portfolio klientow do linkowania
 PORTFOLIO_SITES = [
     {"url": "https://dmitrowsky.pl", "name": "Dmitrowsky Content Lab", "desc": "fotograf i filmowiec"},
     {"url": "https://funpower.pl", "name": "Fun&Power", "desc": "autoryzowany dealer Yamaha"},
@@ -34,7 +34,6 @@ PORTFOLIO_SITES = [
     {"url": "https://klodzkieszlaki.pl", "name": "Kłodzkie Szlaki", "desc": "turystyka i szlaki"},
 ]
 
-# Linki zewnetrzne branżowe
 EXTERNAL_LINKS = [
     {"url": "https://web.dev/performance/", "name": "web.dev", "desc": "optymalizacja wydajności stron"},
     {"url": "https://developers.google.com/search/docs", "name": "Google Search Central", "desc": "dokumentacja SEO Google"},
@@ -80,30 +79,20 @@ def claude_request(prompt, max_tokens=1000):
     return res.json()["content"][0]["text"].strip()
 
 def get_blog_posts():
-    """Pobiera liste wpisow z bloga WordPress."""
     try:
         res = requests.get(
             f"{WP_URL}/wp-json/wp/v2/posts",
-            params={"per_page": 20, "status": "publish", "_fields": "id,title,link,excerpt"},
+            params={"per_page": 20, "status": "publish", "_fields": "id,title,link"},
             timeout=10
         )
         res.raise_for_status()
         posts = res.json()
-        result = []
-        for p in posts:
-            result.append({
-                "title": p["title"]["rendered"],
-                "url": p["link"],
-                "excerpt": p.get("excerpt", {}).get("rendered", "")[:100]
-            })
-        print(f"[{now()}] Pobrano {len(result)} wpisow z bloga")
-        return result
+        return [{"title": p["title"]["rendered"], "url": p["link"]} for p in posts]
     except Exception as e:
         print(f"[{now()}] Blad pobierania wpisow: {e}")
         return []
 
 def get_unsplash_images(keyword, count=3):
-    """Pobiera kilka zdjec z Unsplash."""
     if not UNSPLASH_KEY:
         return []
     try:
@@ -135,7 +124,6 @@ def get_unsplash_images(keyword, count=3):
         return []
 
 def upload_image_to_wordpress(image_url, alt_text, title):
-    """Wgrywa zdjecie do WordPress i zwraca ID oraz URL."""
     try:
         img_res = requests.get(image_url, timeout=30)
         img_res.raise_for_status()
@@ -165,7 +153,6 @@ def upload_image_to_wordpress(image_url, alt_text, title):
         media_id = media["id"]
         media_url = media.get("source_url", "")
 
-        # Ustaw alt text
         auth_headers = {
             "Authorization": f"Basic {auth}",
             "Content-Type": "application/json",
@@ -181,11 +168,37 @@ def upload_image_to_wordpress(image_url, alt_text, title):
         print(f"[{now()}] Blad wgrywania zdjecia: {e}")
         return None, None
 
+def set_rank_math_seo(post_id, keywords, title, description):
+    """Ustawia frazy kluczowe i meta przez nasz custom endpoint."""
+    try:
+        res = requests.post(
+            f"{WP_URL}/wp-json/directwebs/v1/set-seo",
+            json={
+                "post_id": post_id,
+                "keywords": keywords,
+                "title": title,
+                "description": description,
+                "token": DW_TOKEN,
+            },
+            timeout=10
+        )
+        res.raise_for_status()
+        data = res.json()
+        if data.get("success"):
+            print(f"[{now()}] Rank Math OK — frazy: {keywords}")
+        else:
+            print(f"[{now()}] Rank Math blad: {data}")
+    except Exception as e:
+        print(f"[{now()}] Blad Rank Math endpoint: {e}")
+
 def generate_article(kw_data, blog_posts, images):
     focus    = kw_data["focus"]
-    related  = ", ".join(kw_data.get("related", []))
+    related  = kw_data.get("related", [])
     art_type = kw_data.get("type", "poradnik")
     length   = kw_data.get("length", 1800)
+
+    # Wszystkie frazy (focus + related)
+    all_keywords = ", ".join([focus] + related)
 
     type_desc = {
         "poradnik":   "poradnik how-to z praktycznymi krokami",
@@ -195,31 +208,25 @@ def generate_article(kw_data, blog_posts, images):
         "lokalne":    "artykul SEO lokalny",
     }.get(art_type, "artykul blogowy")
 
-    # Wybierz losowe linki portfolio (2-3)
     portfolio_links = random.sample(PORTFOLIO_SITES, min(3, len(PORTFOLIO_SITES)))
     portfolio_str = "\n".join([f'- <a href="{s["url"]}" target="_blank" rel="noopener">{s["name"]}</a> ({s["desc"]})' for s in portfolio_links])
 
-    # Wybierz losowe linki zewnetrzne (2)
     ext_links = random.sample(EXTERNAL_LINKS, min(2, len(EXTERNAL_LINKS)))
     ext_str = "\n".join([f'- <a href="{l["url"]}" target="_blank" rel="nofollow noopener">{l["name"]}</a> ({l["desc"]})' for l in ext_links])
 
-    # Wybierz tematyczne wpisy z bloga (2-3)
     internal_posts = random.sample(blog_posts, min(3, len(blog_posts))) if blog_posts else []
     internal_str = "\n".join([f'- <a href="{p["url"]}">{p["title"]}</a>' for p in internal_posts])
 
-    # Przygotuj placeholdery dla zdjec
     img_placeholders = ""
     for i, img in enumerate(images[:2]):
         img_placeholders += f'\nZDJECIE_{i+1}: <img src="{img["url"]}" alt="{focus} - {img["alt"]}" loading="lazy" style="max-width:100%;height:auto;border-radius:8px;margin:20px 0;">\n'
 
     # KROK 1: Metadane
     print(f"[{now()}] Krok 1: Generuje metadane...")
-    meta_prompt = f"""Dla artykulu SEO o frazie "{focus}" zwroc TYLKO JSON bez tekstu przed ani po:
-{{"title":"{focus} — poradnik [max 60 znaków]","slug":"slug-ascii-bez-polskich-znakow","meta_description":"opis z frazą {focus} i CTA [140-155 znaków]","focus_keyword":"{focus}"}}
+    meta_prompt = f"""Dla artykulu SEO o frazach "{all_keywords}" zwroc TYLKO JSON bez tekstu przed ani po:
+{{"title":"max 60 znakow — fraza {focus} na poczatku","slug":"slug-ascii","meta_description":"max 160 znakow z fraza {focus} i CTA","focus_keyword":"{focus}","all_keywords":"{focus}, {', '.join(related)}"}}"""
 
-Wazne: title musi ZACZYNAC sie od frazy "{focus}" lub jej wariantu."""
-
-    meta_raw = claude_request(meta_prompt, 500)
+    meta_raw = claude_request(meta_prompt, 600)
     meta_raw = re.sub(r'```json\s*', '', meta_raw)
     meta_raw = re.sub(r'```\s*', '', meta_raw).strip()
     start = meta_raw.find('{')
@@ -228,63 +235,62 @@ Wazne: title musi ZACZYNAC sie od frazy "{focus}" lub jej wariantu."""
     try:
         meta = json.loads(json_candidate)
     except json.JSONDecodeError:
-        json_candidate = json_candidate.split("\n")[0]
-        meta = json.loads(json_candidate)
+        meta = json.loads(json_candidate.split('\n')[0])
     print(f"[{now()}] Metadane OK: {meta['title']}")
 
-    # KROK 2: Tresc HTML z pelna optymalizacja
+    # KROK 2: Tresc
     print(f"[{now()}] Krok 2: Generuje tresc artykulu...")
-    content_prompt = f"""Napisz {type_desc} po polsku (~{length} slow) o frazie "{focus}" (powiazane: {related}).
+    content_prompt = f"""Napisz {type_desc} po polsku (~{length} slow) o frazach: {all_keywords}.
+Glowna fraza: "{focus}"
 
 Zwroc TYLKO czysty HTML. Bez komentarzy. Bez markdown. Zacznij od <div class="toc">.
 
-STRUKTURA OBOWIAZKOWA:
+STRUKTURA:
 
-1. SPIS TRESCI na poczatku:
-<div class="toc"><h2>Spis treści</h2><ul>[lista H2 jako linki anchor]</ul></div>
+1. SPIS TRESCI:
+<div class="toc"><h2>Spis treści</h2><ul>[lista H2 jako linki]</ul></div>
 
-2. PIERWSZE 100 SLOW musi zawierac fraze "{focus}".
+2. PIERWSZE 100 SLOW zawiera "{focus}".
 
-3. MIN 6 SEKCJI H2 - kazdy H2 musi zawierac wariant frazy "{focus}":
-Przyklad: <h2 id="sekcja-1">Czym jest {focus}?</h2>
+3. MIN 6 H2 z wariantami frazy "{focus}":
+<h2 id="sekcja-1">{focus} — czym jest i dlaczego warto?</h2>
 
-4. W TRESCI UZYJ tych linkow wewnetrznych do innych wpisow na blogu:
-{internal_str if internal_str else "- brak wpisow do linkowania"}
+4. LINKI WEWNETRZNE do wpisow z bloga:
+{internal_str if internal_str else "brak"}
 
-5. W TRESCI UZYJ tych linkow do stron z portfolio DirectWebs (jako przyklady realizacji):
+5. LINKI DO PORTFOLIO (jako przyklady realizacji DirectWebs):
 {portfolio_str}
 
-6. W TRESCI UZYJ tych linkow zewnetrznych:
+6. LINKI ZEWNETRZNE:
 {ext_str}
 
-7. WSTAW ZDJECIA w odpowiednich miejscach w tresci:
+7. ZDJECIA w tresci:
 {img_placeholders}
-Kazde zdjecie musi miec atrybut alt zawierajacy fraze "{focus}".
 
-8. LINK DO WYCENY (obowiazkowy):
+8. LINK DO WYCENY:
 <a href="https://directwebs.pl/skontaktuj-sie-porozmawiajmy-o-twoim-projekcie/">bezplatna wycena strony internetowej</a>
 
-9. SEKCJA FAQ na koncu (min 5 pytan):
-<h2 id="faq">Najczesciej zadawane pytania — {focus}</h2>
-[h3 + p dla kazdego pytania]
+9. FAQ (min 5 pytan):
+<h2 id="faq">FAQ — {focus}</h2>
+[h3 + p]
 
-10. ZAKONCZENIE z mocnym CTA do kontaktu z DirectWebs.
+10. CTA na koncu.
 
 WAZNE:
-- Gestosc frazy "{focus}": uzyj jej dokladnie 15-20 razy w tresci (~1%)
-- Krotkie akapity (max 3-4 zdania)
-- Uzyj <strong> dla waznych pojec
-- Uzyj <ul>/<ol> gdzie pasuje
-- Naturalny polski jezyk"""
+- Uzyj frazy "{focus}" dokladnie 15-20 razy
+- Krotkie akapity max 3-4 zdania
+- <strong> dla waznych pojec
+- <ul>/<ol> gdzie pasuje"""
 
     content = claude_request(content_prompt, 8000)
-    print(f"[{now()}] Tresc OK, dlugosc: {len(content)} znakow")
+    print(f"[{now()}] Tresc OK, {len(content)} znakow")
 
     return {
         "title": meta["title"],
         "slug": meta["slug"],
         "meta_description": meta["meta_description"],
         "focus_keyword": meta["focus_keyword"],
+        "all_keywords": meta.get("all_keywords", focus),
         "content": content,
     }
 
@@ -314,21 +320,6 @@ def publish_to_wordpress(article, featured_media_id=None):
     post_id = post["id"]
     print(f"[{now()}] Wpis utworzony ID: {post_id}")
 
-    # Rank Math meta
-    print(f"[{now()}] Ustawiam Rank Math SEO...")
-    meta = {
-        "meta": {
-            "rank_math_focus_keyword":        article.get("focus_keyword", ""),
-            "rank_math_description":           article.get("meta_description", ""),
-            "rank_math_title":                 article["title"] + " — DirectWebs",
-            "rank_math_robots":                ["index", "follow"],
-            "rank_math_rich_snippet":          "article",
-            "rank_math_snippet_article_type":  "BlogPosting",
-        }
-    }
-    requests.post(f"{WP_URL}/wp-json/wp/v2/posts/{post_id}", headers=headers, json=meta)
-    print(f"[{now()}] Rank Math ustawiony")
-
     return post_id, post.get("link", "")
 
 def now():
@@ -336,20 +327,16 @@ def now():
 
 def main():
     print(f"\n{'='*50}")
-    print(f"DirectWebs Auto SEO Poster v2 - {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    print(f"DirectWebs Auto SEO Poster v3 - {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     print(f"{'='*50}\n")
 
     print(f"[{now()}] Wybieram slowo kluczowe...")
     kw_data = load_keywords()
     print(f"[{now()}] Wybrano: {kw_data['focus']}")
 
-    # Pobierz wpisy z bloga do linkowania wewnetrznego
     blog_posts = get_blog_posts()
-
-    # Pobierz 3 zdjecia z Unsplash
     images = get_unsplash_images(kw_data["focus"], count=3)
 
-    # Wgraj zdjecia do WordPress
     uploaded_images = []
     for img in images:
         media_id, media_url = upload_image_to_wordpress(
@@ -360,28 +347,29 @@ def main():
         if media_id:
             uploaded_images.append({"id": media_id, "url": media_url, "alt": img["alt"]})
 
-    # Aktualizuj URL zdjec na te z WordPress
     for i, img in enumerate(images[:3]):
         if i < len(uploaded_images):
             images[i]["url"] = uploaded_images[i]["url"]
 
-    # Generuj artykul
     article = generate_article(kw_data, blog_posts, images)
 
-    # Okładka = pierwsze zdjecie
     featured_media_id = uploaded_images[0]["id"] if uploaded_images else None
 
     post_id, post_url = publish_to_wordpress(article, featured_media_id)
 
+    # Ustaw Rank Math przez nasz custom endpoint
+    seo_title = article["title"][:60] if len(article["title"]) > 60 else article["title"]
+    seo_desc = article["meta_description"][:160] if len(article["meta_description"]) > 160 else article["meta_description"]
+    set_rank_math_seo(post_id, article["all_keywords"], seo_title, seo_desc)
+
     print(f"\n{'='*50}")
     print(f"SUKCES!")
     print(f"Tytul:   {article['title']}")
-    print(f"Keyword: {article['focus_keyword']}")
+    print(f"Keyword: {article['all_keywords']}")
     print(f"Post ID: {post_id}")
     print(f"URL:     {post_url}")
     print(f"Okladka: {'TAK' if featured_media_id else 'BRAK'}")
     print(f"Zdjecia: {len(uploaded_images)}")
-    print(f"Linki wewn: {len(blog_posts)}")
     print(f"Status:  {POST_STATUS}")
     print(f"{'='*50}\n")
 
