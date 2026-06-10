@@ -1,0 +1,42 @@
+name: Waża Kotlina — Auto SEO Blog Post
+
+on:
+  schedule:
+    - cron: '0 8 * * 1'  # Poniedziałek
+    - cron: '0 8 * * 3'  # Środa
+    - cron: '0 8 * * 5'  # Piątek
+  workflow_dispatch:
+
+jobs:
+  publish-waza-post:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pobierz kod
+        uses: actions/checkout@v4
+
+      - name: Ustaw Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Zainstaluj zależności
+        run: pip install requests google-auth google-api-python-client
+
+      - name: Generuj i publikuj wpis SEO
+        env:
+          WAZA_WP_URL:      ${{ secrets.WAZA_WP_URL }}
+          WAZA_WP_USER:     ${{ secrets.WAZA_WP_USER }}
+          WAZA_WP_PASSWORD: ${{ secrets.WAZA_WP_PASSWORD }}
+          CLAUDE_KEY:       ${{ secrets.CLAUDE_KEY }}
+          UNSPLASH_KEY:     ${{ secrets.UNSPLASH_KEY }}
+          GSC_SERVICE_ACCOUNT: ${{ secrets.GSC_SERVICE_ACCOUNT }}
+          POST_STATUS:      ${{ secrets.POST_STATUS }}
+        run: python dw-seo-autoposter/post_waza.py
+
+      - name: Zapisz historię słów kluczowych
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: waza-keywords-history
+          path: keywords/waza_used.json
+          if-no-files-found: ignore
