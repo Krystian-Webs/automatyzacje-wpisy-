@@ -65,26 +65,26 @@ Kontekst: DirectWebs tworzy strony WordPress i sklepy WooCommerce. Autor: Krysti
 Napisz {type_desc} (~{length} słów) zoptymalizowany pod frazy: {focus}, {related}
 Focus keyword: "{focus}"
 
-WAŻNE: Zwróć WYŁĄCZNIE surowy JSON bez żadnych znaczników markdown, bez ```json, bez ```, bez żadnego tekstu przed ani po. Zacznij odpowiedź od {{ i zakończ na }}.
+WAŻNE: Zwróć WYŁĄCZNIE surowy JSON. Bez markdown. Bez backticks. Bez tekstu przed ani po. Zacznij od {{ i zakończ na }}.
 
 {{
   "title": "tytuł SEO z focus keyword, max 60 znaków",
   "slug": "slug-bez-polskich-znakow",
   "meta_description": "meta opis 140-155 znaków z CTA",
   "focus_keyword": "{focus}",
-  "content": "PELNA TRESC HTML"
+  "content": "PELNA TRESC HTML - wszystkie tagi HTML muszą być w jednej linii bez łamania"
 }}
 
-Wymagania dla content:
+Wymagania dla content (CAŁY content musi być w jednej linii JSON - użyj \\n zamiast nowych linii):
 - H2 i H3 z wariantami frazy kluczowej
 - Pierwsze 100 słów zawiera focus keyword
 - Gęstość słowa kluczowego 1-1.5%
 - Min 5 sekcji H2
-- Sekcja FAQ na końcu (min 5 pytań jako <h3> + <p>)
-- Link wewnętrzny: <a href="https://directwebs.pl/skontaktuj-sie-porozmawiajmy-o-twoim-projekcie/">bezpłatna wycena strony</a>
+- Sekcja FAQ na końcu (min 5 pytań jako h3 + p)
+- Link wewnętrzny do: https://directwebs.pl/skontaktuj-sie-porozmawiajmy-o-twoim-projekcie/
 - Zakończ mocnym CTA do kontaktu
-- <strong> przy ważnych pojęciach
-- <ul>/<ol> gdzie pasuje
+- strong przy ważnych pojęciach
+- ul/ol gdzie pasuje
 - Naturalny polski, bez sztucznego upychania fraz"""
 
     headers = {
@@ -94,7 +94,7 @@ Wymagania dla content:
     }
     body = {
         "model": "claude-sonnet-4-6",
-        "max_tokens": 4000,
+        "max_tokens": 8000,
         "messages": [{"role": "user", "content": prompt}],
     }
 
@@ -103,21 +103,25 @@ Wymagania dla content:
     res.raise_for_status()
 
     raw = res.json()["content"][0]["text"]
-    print(f"[{now()}] 📥 Odpowiedź Claude (pierwsze 200 znaków): {raw[:200]}")
+    print(f"[{now()}] 📥 Odpowiedź Claude (pierwsze 300 znaków): {raw[:300]}")
 
     # Usuń markdown code blocks
     raw = re.sub(r'```json\s*', '', raw)
     raw = re.sub(r'```\s*', '', raw)
     raw = raw.strip()
 
-    match = re.search(r'\{[\s\S]*\}', raw)
-    if not match:
-        raise ValueError(f"Claude nie zwrócił poprawnego JSON. Odpowiedź: {raw[:300]}")
-    
+    # Znajdź początek i koniec JSON
+    start = raw.find('{')
+    end = raw.rfind('}') + 1
+    if start == -1 or end == 0:
+        raise ValueError(f"Brak JSON w odpowiedzi: {raw[:200]}")
+
+    json_str = raw[start:end]
+
     try:
-        article = json.loads(match.group(0))
+        article = json.loads(json_str)
     except json.JSONDecodeError as e:
-        raise ValueError(f"Błąd parsowania JSON: {e}. Fragment: {match.group(0)[:300]}")
+        raise ValueError(f"Błąd parsowania JSON: {e}")
 
     print(f"[{now()}] ✅ Artykuł wygenerowany: {article['title']}")
     return article
