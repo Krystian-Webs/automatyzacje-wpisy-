@@ -12,12 +12,13 @@ import base64
 import requests
 from datetime import datetime
 
-WP_URL      = os.environ["WP_URL"].rstrip("/")
-WP_USER     = os.environ["WP_USER"]
-WP_PASSWORD = os.environ["WP_PASSWORD"]
-CLAUDE_KEY  = os.environ["CLAUDE_KEY"]
-WP_CATEGORY = int(os.environ.get("WP_CATEGORY_ID", "1"))
-POST_STATUS = os.environ.get("POST_STATUS", "publish")
+WP_URL        = os.environ["WP_URL"].rstrip("/")
+WP_USER       = os.environ["WP_USER"]
+WP_PASSWORD   = os.environ["WP_PASSWORD"]
+CLAUDE_KEY    = os.environ["CLAUDE_KEY"]
+UNSPLASH_KEY  = os.environ.get("UNSPLASH_KEY", "")
+WP_CATEGORY   = int(os.environ.get("WP_CATEGORY_ID", "1"))
+POST_STATUS   = os.environ.get("POST_STATUS", "publish")
 
 def load_keywords():
     path = os.path.join(os.path.dirname(__file__), "keywords", "list.json")
@@ -54,6 +55,71 @@ def claude_request(prompt, max_tokens=1000):
     res.raise_for_status()
     return res.json()["content"][0]["text"].strip()
 
+def get_unsplash_image(keyword):
+    """Pobiera zdjęcie z Unsplash pasujące do słowa kluczowego."""
+    if not UNSPLASH_KEY:
+        print(f"[{now()}] Brak UNSPLASH_KEY, pomijam zdjęcie")
+        return None
+    try:
+        # Tłumacz frazę na angielski dla lepszych wyników
+        en_keyword = keyword.replace("strona internetowa", "website")
+        en_keyword = en_keyword.replace("sklep internetowy", "online store")
+        en_keyword = en_keyword.replace("pozycjonowanie", "SEO")
+        en_keyword = en_keyword.replace("wordpress", "wordpress")
+        en_keyword = en_keyword.replace("strony www", "website")
+
+        res = requests.get(
+            "https://api.unsplash.com/search/photos",
+            params={
+                "query": en_keyword,
+                "per_page": 5,
+                "orientation": "landscape",
+            },
+            headers={"Authorization": f"Client-ID {UNSPLASH_KEY}"}
+        )
+        res.raise_for_status()
+        results = res.json().get("results", [])
+        if not results:
+            print(f"[{now()}] Brak wyników Unsplash dla: {en_keyword}")
+            return None
+        photo = random.choice(results[:3])
+        image_url = photo["urls"]["regular"]
+        photographer = photo["user"]["name"]
+        print(f"[{now()}] Znaleziono zdjęcie: {image_url[:60]}... (fot. {photographer})")
+        return image_url
+    except Exception as e:
+        print(f"[{now()}] Błąd Unsplash: {e}")
+        return None
+
+def upload_image_to_wordpress(image_url, title):
+    """Pobiera zdjęcie z URL i wgrywa do WordPress jako media."""
+    try:
+        print(f"[{now()}] Pobieram zdjęcie z Unsplash...")
+        img_res = requests.get(image_url, timeout=30)
+        img_res.raise_for_status()
+
+        auth = base64.b64encode(f"{WP_USER}:{WP_PASSWORD}".encode()).decode()
+        filename = title.lower().replace(" ", "-")[:50] + ".jpg"
+
+        headers = {
+            "Authorization": f"Basic {auth}",
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Type": "image/jpeg",
+        }
+
+        res = requests.post(
+            f"{WP_URL}/wp-json/wp/v2/media",
+            headers=headers,
+            data=img_res.content
+        )
+        res.raise_for_status()
+        media_id = res.json()["id"]
+        print(f"[{now()}] Zdjęcie wgrane do WP, ID: {media_id}")
+        return media_id
+    except Exception as e:
+        print(f"[{now()}] Błąd wgrywania zdjęcia: {e}")
+        return None
+
 def generate_article(kw_data):
     focus    = kw_data["focus"]
     related  = ", ".join(kw_data.get("related", []))
@@ -68,15 +134,12 @@ def generate_article(kw_data):
         "lokalne":    "artykul SEO lokalny",
     }.get(art_type, "artykul blogowy")
 
-    # KROK 1: Wygeneruj metadane (prosty JSON bez HTML)
+    # KROK 1: Metadane
     print(f"[{now()}] Krok 1: Generuje metadane...")
     meta_prompt = f"""Dla artykulu SEO o frazie "{focus}" zwroc TYLKO ten JSON bez zadnego tekstu przed ani po:
 {{"title":"tytuł max 60 znaków z frazą {focus}","slug":"slug-bez-polskich-znakow","meta_description":"opis 140-155 znaków z CTA","focus_keyword":"{focus}"}}"""
 
     meta_raw = claude_request(meta_prompt, 500)
-    print(f"[{now()}] Meta raw: {meta_raw[:200]}")
-
-    # Parsuj metadane
     meta_raw = re.sub(r'```json\s*', '', meta_raw)
     meta_raw = re.sub(r'```\s*', '', meta_raw).strip()
     start = meta_raw.find('{')
@@ -84,7 +147,7 @@ def generate_article(kw_data):
     meta = json.loads(meta_raw[start:end])
     print(f"[{now()}] Metadane OK: {meta['title']}")
 
-    # KROK 2: Wygeneruj treść HTML (nie JSON)
+    # KROK 2: Treść HTML
     print(f"[{now()}] Krok 2: Generuje tresc artykulu...")
     content_prompt = f"""Napisz {type_desc} po polsku (~{length} slow) o frazie "{focus}" (powiazane: {related}).
 
@@ -111,7 +174,7 @@ Wymagania:
         "content": content,
     }
 
-def publish_to_wordpress(article):
+def publish_to_wordpress(article, featured_media_id=None):
     auth = base64.b64encode(f"{WP_USER}:{WP_PASSWORD}".encode()).decode()
     headers = {
         "Authorization": f"Basic {auth}",
@@ -127,6 +190,10 @@ def publish_to_wordpress(article):
         "status":     POST_STATUS,
         "categories": [WP_CATEGORY],
     }
+
+    if featured_media_id:
+        body["featured_media"] = featured_media_id
+        print(f"[{now()}] Ustawiam okładkę (media ID: {featured_media_id})")
 
     res = requests.post(f"{WP_URL}/wp-json/wp/v2/posts", headers=headers, json=body)
     res.raise_for_status()
@@ -163,7 +230,14 @@ def main():
     print(f"[{now()}] Wybrano: {kw_data['focus']}")
 
     article = generate_article(kw_data)
-    post_id, post_url = publish_to_wordpress(article)
+
+    # Pobierz i wgraj zdjęcie z Unsplash
+    featured_media_id = None
+    image_url = get_unsplash_image(kw_data["focus"])
+    if image_url:
+        featured_media_id = upload_image_to_wordpress(image_url, article["title"])
+
+    post_id, post_url = publish_to_wordpress(article, featured_media_id)
 
     print(f"\n{'='*50}")
     print(f"SUKCES!")
@@ -171,6 +245,7 @@ def main():
     print(f"Keyword: {article['focus_keyword']}")
     print(f"Post ID: {post_id}")
     print(f"URL:     {post_url}")
+    print(f"Okładka: {'TAK' if featured_media_id else 'BRAK'}")
     print(f"Status:  {POST_STATUS}")
     print(f"{'='*50}\n")
 
