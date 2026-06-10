@@ -224,7 +224,12 @@ Wazne: title musi ZACZYNAC sie od frazy "{focus}" lub jej wariantu."""
     meta_raw = re.sub(r'```\s*', '', meta_raw).strip()
     start = meta_raw.find('{')
     end = meta_raw.rfind('}') + 1
-    meta = json.loads(meta_raw[start:end])
+    json_candidate = meta_raw[start:end]
+    try:
+        meta = json.loads(json_candidate)
+    except json.JSONDecodeError:
+        json_candidate = json_candidate.split("\n")[0]
+        meta = json.loads(json_candidate)
     print(f"[{now()}] Metadane OK: {meta['title']}")
 
     # KROK 2: Tresc HTML z pelna optymalizacja
