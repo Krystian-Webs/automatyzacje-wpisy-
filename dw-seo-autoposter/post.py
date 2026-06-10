@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """
-DirectWebs — Auto SEO Blog Post Generator v3
-Pelna optymalizacja Rank Math 80+/100
+DirectWebs — Auto SEO Blog Post Generator v4
+- Google Search Console API (frazy z pozycji 5-20)
+- Claude analizuje i wybiera najlepsze frazy
+- Unsplash zdjecia
+- Rank Math 80+/100
 """
 
 import os
@@ -10,7 +13,9 @@ import json
 import random
 import base64
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
 
 WP_URL        = os.environ["WP_URL"].rstrip("/")
 WP_USER       = os.environ["WP_USER"]
@@ -20,6 +25,8 @@ UNSPLASH_KEY  = os.environ.get("UNSPLASH_KEY", "")
 WP_CATEGORY   = int(os.environ.get("WP_CATEGORY_ID", "1"))
 POST_STATUS   = os.environ.get("POST_STATUS", "publish")
 DW_TOKEN      = "directwebs2026"
+GSC_JSON      = os.environ.get("GSC_SERVICE_ACCOUNT", "")
+GSC_SITE      = "sc-domain:directwebs.pl"
 
 PORTFOLIO_SITES = [
     {"url": "https://dmitrowsky.pl", "name": "Dmitrowsky Content Lab", "desc": "fotograf i filmowiec"},
@@ -43,7 +50,85 @@ EXTERNAL_LINKS = [
     {"url": "https://pagespeed.web.dev/", "name": "Google PageSpeed", "desc": "szybkość ładowania stron"},
 ]
 
-def load_keywords():
+def now():
+    return datetime.now().strftime("%H:%M:%S")
+
+def claude_request(prompt, max_tokens=1000):
+    headers = {
+        "x-api-key": CLAUDE_KEY,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+    }
+    body = {
+        "model": "claude-sonnet-4-6",
+        "max_tokens": max_tokens,
+        "messages": [{"role": "user", "content": prompt}],
+    }
+    res = requests.post("https://api.anthropic.com/v1/messages", headers=headers, json=body)
+    res.raise_for_status()
+    return res.json()["content"][0]["text"].strip()
+
+def get_gsc_keywords():
+    """Pobiera frazy z Google Search Console na pozycji 5-20."""
+    if not GSC_JSON:
+        print(f"[{now()}] Brak GSC_SERVICE_ACCOUNT, uzywam list.json")
+        return None
+
+    try:
+        creds_data = json.loads(GSC_JSON)
+        creds = service_account.Credentials.from_service_account_info(
+            creds_data,
+            scopes=["https://www.googleapis.com/auth/webmasters.readonly"]
+        )
+        service = build("searchconsole", "v1", credentials=creds)
+
+        end_date = datetime.now().strftime("%Y-%m-%d")
+        start_date = (datetime.now() - timedelta(days=90)).strftime("%Y-%m-%d")
+
+        response = service.searchanalytics().query(
+            siteUrl=GSC_SITE,
+            body={
+                "startDate": start_date,
+                "endDate": end_date,
+                "dimensions": ["query"],
+                "rowLimit": 100,
+                "dimensionFilterGroups": [{
+                    "filters": [{
+                        "dimension": "query",
+                        "operator": "notContains",
+                        "expression": "directwebs"
+                    }]
+                }]
+            }
+        ).execute()
+
+        rows = response.get("rows", [])
+        
+        # Filtruj frazy na pozycji 5-20 (łatwe do podbicia)
+        good_keywords = []
+        for row in rows:
+            query = row["keys"][0]
+            position = row.get("position", 0)
+            clicks = row.get("clicks", 0)
+            impressions = row.get("impressions", 0)
+            
+            if 4 <= position <= 20 and impressions >= 10 and len(query) > 3:
+                good_keywords.append({
+                    "query": query,
+                    "position": round(position, 1),
+                    "clicks": clicks,
+                    "impressions": impressions
+                })
+
+        print(f"[{now()}] GSC: znaleziono {len(good_keywords)} fraz na pozycji 5-20")
+        return good_keywords if good_keywords else None
+
+    except Exception as e:
+        print(f"[{now()}] Blad GSC: {e}")
+        return None
+
+def load_keywords_from_file():
+    """Fallback — wczytaj frazy z list.json."""
     path = os.path.join(os.path.dirname(__file__), "keywords", "list.json")
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -63,20 +148,34 @@ def load_keywords():
         json.dump(used, f, ensure_ascii=False)
     return chosen
 
-def claude_request(prompt, max_tokens=1000):
-    headers = {
-        "x-api-key": CLAUDE_KEY,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-    }
-    body = {
-        "model": "claude-sonnet-4-6",
-        "max_tokens": max_tokens,
-        "messages": [{"role": "user", "content": prompt}],
-    }
-    res = requests.post("https://api.anthropic.com/v1/messages", headers=headers, json=body)
-    res.raise_for_status()
-    return res.json()["content"][0]["text"].strip()
+def choose_best_keyword(gsc_keywords):
+    """Claude wybiera najlepszą frazę z danych GSC."""
+    kw_list = "\n".join([
+        f"- \"{k['query']}\" (pozycja: {k['position']}, wyswietlenia: {k['impressions']}, klikniecia: {k['clicks']})"
+        for k in gsc_keywords[:30]
+    ])
+
+    prompt = f"""Jesteś ekspertem SEO. Masz dane z Google Search Console dla strony agencji webdesign directwebs.pl.
+
+Frazy na pozycji 5-20 (łatwe do podbicia artykułem blogowym):
+{kw_list}
+
+Wybierz JEDNĄ najlepszą frazę do napisania artykułu blogowego. Kryteria:
+1. Duże wyświetlenia (wysoki potencjał ruchu)
+2. Fraza informacyjna (pasuje do artykułu poradnikowego)
+3. Związana z tworzeniem stron, SEO, WordPress lub webdesignem
+
+Zwróć TYLKO JSON bez tekstu przed ani po:
+{{"focus":"wybrana fraza","reason":"krótkie uzasadnienie","related":["fraza powiązana 1","fraza powiązana 2","fraza powiązana 3"],"type":"poradnik","length":1800}}"""
+
+    raw = claude_request(prompt, 500)
+    raw = re.sub(r'```json\s*', '', raw)
+    raw = re.sub(r'```\s*', '', raw).strip()
+    start = raw.find('{')
+    end = raw.rfind('}') + 1
+    result = json.loads(raw[start:end])
+    print(f"[{now()}] Claude wybrał: \"{result['focus']}\" — {result['reason']}")
+    return result
 
 def get_blog_posts():
     try:
@@ -169,7 +268,6 @@ def upload_image_to_wordpress(image_url, alt_text, title):
         return None, None
 
 def set_rank_math_seo(post_id, keywords, title, description):
-    """Ustawia frazy kluczowe i meta przez nasz custom endpoint."""
     try:
         res = requests.post(
             f"{WP_URL}/wp-json/directwebs/v1/set-seo",
@@ -186,18 +284,14 @@ def set_rank_math_seo(post_id, keywords, title, description):
         data = res.json()
         if data.get("success"):
             print(f"[{now()}] Rank Math OK — frazy: {keywords}")
-        else:
-            print(f"[{now()}] Rank Math blad: {data}")
     except Exception as e:
-        print(f"[{now()}] Blad Rank Math endpoint: {e}")
+        print(f"[{now()}] Blad Rank Math: {e}")
 
 def generate_article(kw_data, blog_posts, images):
-    focus    = kw_data["focus"]
-    related  = kw_data.get("related", [])
+    focus   = kw_data["focus"]
+    related = kw_data.get("related", [])
     art_type = kw_data.get("type", "poradnik")
-    length   = kw_data.get("length", 1800)
-
-    # Wszystkie frazy (focus + related)
+    length  = kw_data.get("length", 1800)
     all_keywords = ", ".join([focus] + related)
 
     type_desc = {
@@ -246,41 +340,18 @@ Glowna fraza: "{focus}"
 Zwroc TYLKO czysty HTML. Bez komentarzy. Bez markdown. Zacznij od <div class="toc">.
 
 STRUKTURA:
+1. SPIS TRESCI: <div class="toc"><h2>Spis treści</h2><ul>[lista H2]</ul></div>
+2. PIERWSZE 100 SLOW zawiera "{focus}"
+3. MIN 6 H2 z wariantami frazy "{focus}"
+4. LINKI WEWNETRZNE: {internal_str if internal_str else "brak"}
+5. LINKI PORTFOLIO: {portfolio_str}
+6. LINKI ZEWNETRZNE: {ext_str}
+7. ZDJECIA: {img_placeholders}
+8. LINK: <a href="https://directwebs.pl/skontaktuj-sie-porozmawiajmy-o-twoim-projekcie/">bezplatna wycena strony</a>
+9. FAQ: <h2 id="faq">FAQ — {focus}</h2> (min 5 pytan h3+p)
+10. CTA na koncu
 
-1. SPIS TRESCI:
-<div class="toc"><h2>Spis treści</h2><ul>[lista H2 jako linki]</ul></div>
-
-2. PIERWSZE 100 SLOW zawiera "{focus}".
-
-3. MIN 6 H2 z wariantami frazy "{focus}":
-<h2 id="sekcja-1">{focus} — czym jest i dlaczego warto?</h2>
-
-4. LINKI WEWNETRZNE do wpisow z bloga:
-{internal_str if internal_str else "brak"}
-
-5. LINKI DO PORTFOLIO (jako przyklady realizacji DirectWebs):
-{portfolio_str}
-
-6. LINKI ZEWNETRZNE:
-{ext_str}
-
-7. ZDJECIA w tresci:
-{img_placeholders}
-
-8. LINK DO WYCENY:
-<a href="https://directwebs.pl/skontaktuj-sie-porozmawiajmy-o-twoim-projekcie/">bezplatna wycena strony internetowej</a>
-
-9. FAQ (min 5 pytan):
-<h2 id="faq">FAQ — {focus}</h2>
-[h3 + p]
-
-10. CTA na koncu.
-
-WAZNE:
-- Uzyj frazy "{focus}" dokladnie 15-20 razy
-- Krotkie akapity max 3-4 zdania
-- <strong> dla waznych pojec
-- <ul>/<ol> gdzie pasuje"""
+WAZNE: uzyj "{focus}" 15-20 razy, krotkie akapity, <strong> dla pojec"""
 
     content = claude_request(content_prompt, 8000)
     print(f"[{now()}] Tresc OK, {len(content)} znakow")
@@ -318,20 +389,25 @@ def publish_to_wordpress(article, featured_media_id=None):
     res.raise_for_status()
     post = res.json()
     post_id = post["id"]
-    print(f"[{now()}] Wpis utworzony ID: {post_id}")
-
-    return post_id, post.get("link", "")
-
-def now():
-    return datetime.now().strftime("%H:%M:%S")
+    post_url = post.get("link", "")
+    print(f"[{now()}] Wpis utworzony ID: {post_id} — {post_url}")
+    return post_id, post_url
 
 def main():
     print(f"\n{'='*50}")
-    print(f"DirectWebs Auto SEO Poster v3 - {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    print(f"DirectWebs Auto SEO Poster v4 - {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     print(f"{'='*50}\n")
 
-    print(f"[{now()}] Wybieram slowo kluczowe...")
-    kw_data = load_keywords()
+    # Pobierz frazy — najpierw z GSC, fallback na list.json
+    gsc_keywords = get_gsc_keywords()
+
+    if gsc_keywords:
+        print(f"[{now()}] Uzywam danych z Google Search Console ({len(gsc_keywords)} fraz)")
+        kw_data = choose_best_keyword(gsc_keywords)
+    else:
+        print(f"[{now()}] Uzywam fraz z list.json")
+        kw_data = load_keywords_from_file()
+
     print(f"[{now()}] Wybrano: {kw_data['focus']}")
 
     blog_posts = get_blog_posts()
@@ -352,14 +428,11 @@ def main():
             images[i]["url"] = uploaded_images[i]["url"]
 
     article = generate_article(kw_data, blog_posts, images)
-
     featured_media_id = uploaded_images[0]["id"] if uploaded_images else None
-
     post_id, post_url = publish_to_wordpress(article, featured_media_id)
 
-    # Ustaw Rank Math przez nasz custom endpoint
-    seo_title = article["title"][:60] if len(article["title"]) > 60 else article["title"]
-    seo_desc = article["meta_description"][:160] if len(article["meta_description"]) > 160 else article["meta_description"]
+    seo_title = article["title"][:60]
+    seo_desc = article["meta_description"][:160]
     set_rank_math_seo(post_id, article["all_keywords"], seo_title, seo_desc)
 
     print(f"\n{'='*50}")
@@ -370,7 +443,7 @@ def main():
     print(f"URL:     {post_url}")
     print(f"Okladka: {'TAK' if featured_media_id else 'BRAK'}")
     print(f"Zdjecia: {len(uploaded_images)}")
-    print(f"Status:  {POST_STATUS}")
+    print(f"Zrodlo:  {'Google Search Console' if gsc_keywords else 'list.json'}")
     print(f"{'='*50}\n")
 
 if __name__ == "__main__":
