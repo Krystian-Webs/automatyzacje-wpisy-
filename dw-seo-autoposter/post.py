@@ -3,7 +3,7 @@
 DirectWebs — Auto SEO Blog Post Generator v4
 - Google Search Console API (frazy z pozycji 5-20)
 - Claude analizuje i wybiera najlepsze frazy
-- Unsplash zdjecia
+- Unsplash zdjecia z atrybucją fotografa
 - Rank Math 80+/100
 """
 
@@ -103,15 +103,14 @@ def get_gsc_keywords():
         ).execute()
 
         rows = response.get("rows", [])
-        
-        # Filtruj frazy na pozycji 5-20 (łatwe do podbicia)
+
         good_keywords = []
         for row in rows:
             query = row["keys"][0]
             position = row.get("position", 0)
             clicks = row.get("clicks", 0)
             impressions = row.get("impressions", 0)
-            
+
             if 4 <= position <= 20 and impressions >= 10 and len(query) > 3:
                 good_keywords.append({
                     "query": query,
@@ -214,15 +213,28 @@ def get_unsplash_images(keyword, count=3):
             images.append({
                 "url": photo["urls"]["regular"],
                 "photographer": photo["user"]["name"],
+                "photographer_url": photo["user"]["links"]["html"] + "?utm_source=directwebs&utm_medium=referral",
+                "unsplash_url": photo["links"]["html"] + "?utm_source=directwebs&utm_medium=referral",
                 "alt": photo.get("alt_description", keyword) or keyword
             })
+
+            # Trigger download endpoint (wymagane przez Unsplash API)
+            try:
+                requests.get(
+                    photo["links"]["download_location"],
+                    headers={"Authorization": f"Client-ID {UNSPLASH_KEY}"},
+                    timeout=5
+                )
+            except Exception:
+                pass
+
         print(f"[{now()}] Pobrano {len(images)} zdjec z Unsplash")
         return images
     except Exception as e:
         print(f"[{now()}] Blad Unsplash: {e}")
         return []
 
-def upload_image_to_wordpress(image_url, alt_text, title):
+def upload_image_to_wordpress(image_url, alt_text, title, photographer="", photographer_url="", unsplash_url=""):
     try:
         img_res = requests.get(image_url, timeout=30)
         img_res.raise_for_status()
@@ -256,10 +268,20 @@ def upload_image_to_wordpress(image_url, alt_text, title):
             "Authorization": f"Basic {auth}",
             "Content-Type": "application/json",
         }
+
+        # Atrybucja wymagana przez Unsplash
+        if photographer and photographer_url and unsplash_url:
+            caption = (
+                f'Photo by <a href="{photographer_url}" target="_blank" rel="noopener">{photographer}</a> '
+                f'on <a href="{unsplash_url}" target="_blank" rel="noopener">Unsplash</a>'
+            )
+        else:
+            caption = alt_text
+
         requests.post(
             f"{WP_URL}/wp-json/wp/v2/media/{media_id}",
             headers=auth_headers,
-            json={"alt_text": alt_text, "caption": f"Fot. {alt_text}"}
+            json={"alt_text": alt_text, "caption": caption}
         )
 
         return media_id, media_url
@@ -288,10 +310,10 @@ def set_rank_math_seo(post_id, keywords, title, description):
         print(f"[{now()}] Blad Rank Math: {e}")
 
 def generate_article(kw_data, blog_posts, images):
-    focus   = kw_data["focus"]
-    related = kw_data.get("related", [])
+    focus    = kw_data["focus"]
+    related  = kw_data.get("related", [])
     art_type = kw_data.get("type", "poradnik")
-    length  = kw_data.get("length", 1800)
+    length   = kw_data.get("length", 1800)
     all_keywords = ", ".join([focus] + related)
 
     type_desc = {
@@ -313,7 +335,16 @@ def generate_article(kw_data, blog_posts, images):
 
     img_placeholders = ""
     for i, img in enumerate(images[:2]):
-        img_placeholders += f'\nZDJECIE_{i+1}: <img src="{img["url"]}" alt="{focus} - {img["alt"]}" loading="lazy" style="max-width:100%;height:auto;border-radius:8px;margin:20px 0;">\n'
+        attribution = (
+            f'<p style="font-size:0.75rem;color:#888;margin-top:4px;">'
+            f'Photo by <a href="{img.get("photographer_url","")}" target="_blank" rel="noopener">{img.get("photographer","")}</a> '
+            f'on <a href="{img.get("unsplash_url","")}" target="_blank" rel="noopener">Unsplash</a></p>'
+        )
+        img_placeholders += (
+            f'\nZDJECIE_{i+1}: <figure style="margin:20px 0;">'
+            f'<img src="{img["url"]}" alt="{focus} - {img["alt"]}" loading="lazy" style="max-width:100%;height:auto;border-radius:8px;">'
+            f'{attribution}</figure>\n'
+        )
 
     # KROK 1: Metadane
     print(f"[{now()}] Krok 1: Generuje metadane...")
@@ -398,7 +429,6 @@ def main():
     print(f"DirectWebs Auto SEO Poster v4 - {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     print(f"{'='*50}\n")
 
-    # Pobierz frazy — najpierw z GSC, fallback na list.json
     gsc_keywords = get_gsc_keywords()
 
     if gsc_keywords:
@@ -418,7 +448,10 @@ def main():
         media_id, media_url = upload_image_to_wordpress(
             img["url"],
             f"{kw_data['focus']} - {img['alt']}",
-            kw_data["focus"]
+            kw_data["focus"],
+            photographer=img.get("photographer", ""),
+            photographer_url=img.get("photographer_url", ""),
+            unsplash_url=img.get("unsplash_url", "")
         )
         if media_id:
             uploaded_images.append({"id": media_id, "url": media_url, "alt": img["alt"]})
