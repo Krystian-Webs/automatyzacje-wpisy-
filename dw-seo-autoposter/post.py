@@ -12,7 +12,6 @@ import base64
 import requests
 from datetime import datetime
 
-# ── KONFIGURACJA Z GITHUB SECRETS ─────────────────────
 WP_URL      = os.environ["WP_URL"].rstrip("/")
 WP_USER     = os.environ["WP_USER"]
 WP_PASSWORD = os.environ["WP_PASSWORD"]
@@ -24,74 +23,36 @@ def load_keywords():
     path = os.path.join(os.path.dirname(__file__), "keywords", "list.json")
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
-    
     history_path = os.path.join(os.path.dirname(__file__), "keywords", "used.json")
     used = []
     if os.path.exists(history_path):
         with open(history_path, "r", encoding="utf-8") as f:
             used = json.load(f)
-    
     available = [kw for kw in data if kw["focus"] not in used]
-    
     if not available:
         available = data
         used = []
-    
     chosen = random.choice(available)
     used.append(chosen["focus"])
     os.makedirs(os.path.dirname(history_path), exist_ok=True)
     with open(history_path, "w", encoding="utf-8") as f:
         json.dump(used, f, ensure_ascii=False)
-    
     return chosen
 
-def extract_json(text):
-    """Wyciąga i parsuje JSON z tekstu — obsługuje wieloliniowy JSON."""
-    # Usuń markdown
-    text = re.sub(r'```json\s*', '', text)
-    text = re.sub(r'```\s*', '', text)
-    text = text.strip()
-
-    # Znajdź zakres JSON
-    start = text.find('{')
-    if start == -1:
-        raise ValueError(f"Brak {{ w odpowiedzi: {text[:200]}")
-    
-    # Zlicz nawiasy żeby znaleźć właściwy koniec
-    depth = 0
-    end = -1
-    in_string = False
-    escape = False
-    
-    for i, ch in enumerate(text[start:], start):
-        if escape:
-            escape = False
-            continue
-        if ch == '\\' and in_string:
-            escape = True
-            continue
-        if ch == '"' and not escape:
-            in_string = not in_string
-            continue
-        if in_string:
-            continue
-        if ch == '{':
-            depth += 1
-        elif ch == '}':
-            depth -= 1
-            if depth == 0:
-                end = i + 1
-                break
-    
-    if end == -1:
-        raise ValueError(f"Niedomknięty JSON, depth={depth}")
-    
-    json_str = text[start:end]
-    
-    try:
-        return json.loads(json_str)
-    except json.JSONDecodeError as e:
-        raise ValueError(f"JSONDecodeError: {e}")
+def claude_request(prompt, max_tokens=1000):
+    headers = {
+        "x-api-key": CLAUDE_KEY,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+    }
+    body = {
+        "model": "claude-sonnet-4-6",
+        "max_tokens": max_tokens,
+        "messages": [{"role": "user", "content": prompt}],
+    }
+    res = requests.post("https://api.anthropic.com/v1/messages", headers=headers, json=body)
+    res.raise_for_status()
+    return res.json()["content"][0]["text"].strip()
 
 def generate_article(kw_data):
     focus    = kw_data["focus"]
@@ -101,59 +62,54 @@ def generate_article(kw_data):
 
     type_desc = {
         "poradnik":   "poradnik how-to z praktycznymi krokami",
-        "porownanie": "artykuł porównawczy",
-        "lista":      "artykuł w formie listy (Top X)",
-        "faq":        "artykuł FAQ z pytaniami i odpowiedziami",
-        "lokalne":    "artykuł SEO lokalny",
-    }.get(art_type, "artykuł blogowy")
+        "porownanie": "artykul porownawczy",
+        "lista":      "artykul w formie listy Top X",
+        "faq":        "artykul FAQ z pytaniami i odpowiedziami",
+        "lokalne":    "artykul SEO lokalny",
+    }.get(art_type, "artykul blogowy")
 
-    prompt = f"""Jesteś ekspertem SEO i copywriterem dla agencji webdesign DirectWebs.pl z Polski.
-Kontekst: DirectWebs tworzy strony WordPress i sklepy WooCommerce. Autor: Krystian. Lokalizacja: Polska.
+    # KROK 1: Wygeneruj metadane (prosty JSON bez HTML)
+    print(f"[{now()}] Krok 1: Generuje metadane...")
+    meta_prompt = f"""Dla artykulu SEO o frazie "{focus}" zwroc TYLKO ten JSON bez zadnego tekstu przed ani po:
+{{"title":"tytuł max 60 znaków z frazą {focus}","slug":"slug-bez-polskich-znakow","meta_description":"opis 140-155 znaków z CTA","focus_keyword":"{focus}"}}"""
 
-Napisz {type_desc} (~{length} słów) zoptymalizowany pod frazy: {focus}, {related}
-Focus keyword: "{focus}"
+    meta_raw = claude_request(meta_prompt, 500)
+    print(f"[{now()}] Meta raw: {meta_raw[:200]}")
 
-Zwróć TYLKO i WYŁĄCZNIE JSON w tym formacie (bez żadnego tekstu przed ani po):
+    # Parsuj metadane
+    meta_raw = re.sub(r'```json\s*', '', meta_raw)
+    meta_raw = re.sub(r'```\s*', '', meta_raw).strip()
+    start = meta_raw.find('{')
+    end = meta_raw.rfind('}') + 1
+    meta = json.loads(meta_raw[start:end])
+    print(f"[{now()}] Metadane OK: {meta['title']}")
 
-{{
-  "title": "tytuł SEO z focus keyword max 60 znaków",
-  "slug": "slug-bez-polskich-znakow",
-  "meta_description": "meta opis 140-155 znaków z CTA",
-  "focus_keyword": "{focus}",
-  "content": "CAŁA TREŚĆ HTML TUTAJ"
-}}
+    # KROK 2: Wygeneruj treść HTML (nie JSON)
+    print(f"[{now()}] Krok 2: Generuje tresc artykulu...")
+    content_prompt = f"""Napisz {type_desc} po polsku (~{length} slow) o frazie "{focus}" (powiazane: {related}).
 
-Wymagania dla content:
-- H2 i H3 z wariantami frazy kluczowej
-- Pierwsze 100 słów zawiera focus keyword
-- Gęstość słowa kluczowego 1-1.5%
-- Min 5 sekcji H2
-- Sekcja FAQ na końcu min 5 pytań
-- Link: <a href="https://directwebs.pl/skontaktuj-sie-porozmawiajmy-o-twoim-projekcie/">bezpłatna wycena</a>
-- Zakończ CTA do kontaktu
-- Naturalny polski"""
+Zwroc TYLKO czysty HTML bez zadnych komentarzy, bez markdown, bez tekstu przed ani po.
+Zacznij od <h2> (nie od h1).
 
-    headers = {
-        "x-api-key": CLAUDE_KEY,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
+Wymagania:
+- Min 5 sekcji H2 z wariantami frazy "{focus}"
+- Pierwsze 100 slow zawiera "{focus}"
+- Gestosc slowa kluczowego 1-1.5%
+- Sekcja FAQ na koncu min 5 pytan jako h3 + p
+- Dodaj link: <a href="https://directwebs.pl/skontaktuj-sie-porozmawiajmy-o-twoim-projekcie/">bezplatna wycena strony</a>
+- Zakonczenie z CTA
+- Naturalny polski jezyk"""
+
+    content = claude_request(content_prompt, 8000)
+    print(f"[{now()}] Tresc OK, dlugosc: {len(content)} znakow")
+
+    return {
+        "title": meta["title"],
+        "slug": meta["slug"],
+        "meta_description": meta["meta_description"],
+        "focus_keyword": meta["focus_keyword"],
+        "content": content,
     }
-    body = {
-        "model": "claude-sonnet-4-6",
-        "max_tokens": 8000,
-        "messages": [{"role": "user", "content": prompt}],
-    }
-
-    print(f"[{now()}] Wysylam prompt do Claude API...")
-    res = requests.post("https://api.anthropic.com/v1/messages", headers=headers, json=body)
-    res.raise_for_status()
-
-    raw = res.json()["content"][0]["text"]
-    print(f"[{now()}] Odpowiedz Claude ({len(raw)} znakow), pierwsze 150: {raw[:150]}")
-
-    article = extract_json(raw)
-    print(f"[{now()}] Artykul wygenerowany: {article['title']}")
-    return article
 
 def publish_to_wordpress(article):
     auth = base64.b64encode(f"{WP_USER}:{WP_PASSWORD}".encode()).decode()
@@ -211,11 +167,11 @@ def main():
 
     print(f"\n{'='*50}")
     print(f"SUKCES!")
-    print(f"Tytul:    {article['title']}")
-    print(f"Keyword:  {article['focus_keyword']}")
-    print(f"Post ID:  {post_id}")
-    print(f"URL:      {post_url}")
-    print(f"Status:   {POST_STATUS}")
+    print(f"Tytul:   {article['title']}")
+    print(f"Keyword: {article['focus_keyword']}")
+    print(f"Post ID: {post_id}")
+    print(f"URL:     {post_url}")
+    print(f"Status:  {POST_STATUS}")
     print(f"{'='*50}\n")
 
 if __name__ == "__main__":
