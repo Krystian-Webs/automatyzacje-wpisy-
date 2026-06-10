@@ -56,50 +56,50 @@ def claude_request(prompt, max_tokens=1000):
     return res.json()["content"][0]["text"].strip()
 
 def get_unsplash_image(keyword):
-    """Pobiera zdjęcie z Unsplash pasujące do słowa kluczowego."""
     if not UNSPLASH_KEY:
-        print(f"[{now()}] Brak UNSPLASH_KEY, pomijam zdjęcie")
+        print(f"[{now()}] Brak UNSPLASH_KEY, pomijam zdjecie")
         return None
     try:
-        # Tłumacz frazę na angielski dla lepszych wyników
         en_keyword = keyword.replace("strona internetowa", "website")
         en_keyword = en_keyword.replace("sklep internetowy", "online store")
         en_keyword = en_keyword.replace("pozycjonowanie", "SEO")
-        en_keyword = en_keyword.replace("wordpress", "wordpress")
         en_keyword = en_keyword.replace("strony www", "website")
+        en_keyword = en_keyword.replace("hosting", "web hosting")
 
         res = requests.get(
             "https://api.unsplash.com/search/photos",
-            params={
-                "query": en_keyword,
-                "per_page": 5,
-                "orientation": "landscape",
-            },
+            params={"query": en_keyword, "per_page": 5, "orientation": "landscape"},
             headers={"Authorization": f"Client-ID {UNSPLASH_KEY}"}
         )
         res.raise_for_status()
         results = res.json().get("results", [])
         if not results:
-            print(f"[{now()}] Brak wyników Unsplash dla: {en_keyword}")
+            print(f"[{now()}] Brak wynikow Unsplash dla: {en_keyword}")
             return None
         photo = random.choice(results[:3])
         image_url = photo["urls"]["regular"]
         photographer = photo["user"]["name"]
-        print(f"[{now()}] Znaleziono zdjęcie: {image_url[:60]}... (fot. {photographer})")
+        print(f"[{now()}] Znaleziono zdjecie (fot. {photographer})")
         return image_url
     except Exception as e:
-        print(f"[{now()}] Błąd Unsplash: {e}")
+        print(f"[{now()}] Blad Unsplash: {e}")
         return None
 
 def upload_image_to_wordpress(image_url, title):
-    """Pobiera zdjęcie z URL i wgrywa do WordPress jako media."""
     try:
-        print(f"[{now()}] Pobieram zdjęcie z Unsplash...")
+        print(f"[{now()}] Pobieram zdjecie z Unsplash...")
         img_res = requests.get(image_url, timeout=30)
         img_res.raise_for_status()
 
         auth = base64.b64encode(f"{WP_USER}:{WP_PASSWORD}".encode()).decode()
-        filename = title.lower().replace(" ", "-")[:50] + ".jpg"
+
+        # Bezpieczna nazwa pliku - tylko ASCII
+        filename = re.sub(r'[^\w\s-]', '', title.lower())
+        filename = filename.encode('ascii', 'ignore').decode('ascii')
+        filename = re.sub(r'[\s]+', '-', filename)[:50] + ".jpg"
+        filename = filename.strip('-')
+        if not filename or filename == ".jpg":
+            filename = "featured-image.jpg"
 
         headers = {
             "Authorization": f"Basic {auth}",
@@ -114,10 +114,10 @@ def upload_image_to_wordpress(image_url, title):
         )
         res.raise_for_status()
         media_id = res.json()["id"]
-        print(f"[{now()}] Zdjęcie wgrane do WP, ID: {media_id}")
+        print(f"[{now()}] Zdjecie wgrane do WP, ID: {media_id}")
         return media_id
     except Exception as e:
-        print(f"[{now()}] Błąd wgrywania zdjęcia: {e}")
+        print(f"[{now()}] Blad wgrywania zdjecia: {e}")
         return None
 
 def generate_article(kw_data):
@@ -134,7 +134,6 @@ def generate_article(kw_data):
         "lokalne":    "artykul SEO lokalny",
     }.get(art_type, "artykul blogowy")
 
-    # KROK 1: Metadane
     print(f"[{now()}] Krok 1: Generuje metadane...")
     meta_prompt = f"""Dla artykulu SEO o frazie "{focus}" zwroc TYLKO ten JSON bez zadnego tekstu przed ani po:
 {{"title":"tytuł max 60 znaków z frazą {focus}","slug":"slug-bez-polskich-znakow","meta_description":"opis 140-155 znaków z CTA","focus_keyword":"{focus}"}}"""
@@ -147,7 +146,6 @@ def generate_article(kw_data):
     meta = json.loads(meta_raw[start:end])
     print(f"[{now()}] Metadane OK: {meta['title']}")
 
-    # KROK 2: Treść HTML
     print(f"[{now()}] Krok 2: Generuje tresc artykulu...")
     content_prompt = f"""Napisz {type_desc} po polsku (~{length} slow) o frazie "{focus}" (powiazane: {related}).
 
@@ -231,7 +229,6 @@ def main():
 
     article = generate_article(kw_data)
 
-    # Pobierz i wgraj zdjęcie z Unsplash
     featured_media_id = None
     image_url = get_unsplash_image(kw_data["focus"])
     if image_url:
@@ -245,7 +242,7 @@ def main():
     print(f"Keyword: {article['focus_keyword']}")
     print(f"Post ID: {post_id}")
     print(f"URL:     {post_url}")
-    print(f"Okładka: {'TAK' if featured_media_id else 'BRAK'}")
+    print(f"Okladka: {'TAK' if featured_media_id else 'BRAK'}")
     print(f"Status:  {POST_STATUS}")
     print(f"{'='*50}\n")
 
