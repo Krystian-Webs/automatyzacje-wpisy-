@@ -5,6 +5,7 @@ Uruchamia się automatycznie przez GitHub Actions (wt/czw/sob o 8:00)
 """
 
 import os
+import re
 import json
 import random
 import base64
@@ -17,35 +18,26 @@ WP_USER     = os.environ["WP_USER"]
 WP_PASSWORD = os.environ["WP_PASSWORD"]
 CLAUDE_KEY  = os.environ["CLAUDE_KEY"]
 WP_CATEGORY = int(os.environ.get("WP_CATEGORY_ID", "1"))
-POST_STATUS = os.environ.get("POST_STATUS", "publish")  # publish lub draft
-
-# ── SŁOWA KLUCZOWE ────────────────────────────────────
-# System losuje jedną grupę na każde uruchomienie
-# Edytuj listę keywords/list.json żeby dodać własne frazy
+POST_STATUS = os.environ.get("POST_STATUS", "publish")
 
 def load_keywords():
     path = os.path.join(os.path.dirname(__file__), "keywords", "list.json")
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
     
-    # Wczytaj historię użytych fraz
     history_path = os.path.join(os.path.dirname(__file__), "keywords", "used.json")
     used = []
     if os.path.exists(history_path):
         with open(history_path, "r", encoding="utf-8") as f:
             used = json.load(f)
     
-    # Wybierz frazę której jeszcze nie użyto
     available = [kw for kw in data if kw["focus"] not in used]
     
-    # Jeśli wszystkie użyte — zacznij od nowa
     if not available:
         available = data
         used = []
     
     chosen = random.choice(available)
-    
-    # Zapisz jako użytą
     used.append(chosen["focus"])
     os.makedirs(os.path.dirname(history_path), exist_ok=True)
     with open(history_path, "w", encoding="utf-8") as f:
@@ -53,7 +45,6 @@ def load_keywords():
     
     return chosen
 
-# ── GENERUJ ARTYKUŁ PRZEZ CLAUDE ─────────────────────
 def generate_article(kw_data):
     focus    = kw_data["focus"]
     related  = ", ".join(kw_data.get("related", []))
@@ -74,7 +65,8 @@ Kontekst: DirectWebs tworzy strony WordPress i sklepy WooCommerce. Autor: Krysti
 Napisz {type_desc} (~{length} słów) zoptymalizowany pod frazy: {focus}, {related}
 Focus keyword: "{focus}"
 
-Zwróć WYŁĄCZNIE poprawny JSON (bez markdown, bez backticks, bez tekstu przed ani po):
+WAŻNE: Zwróć WYŁĄCZNIE surowy JSON bez żadnych znaczników markdown, bez ```json, bez ```, bez żadnego tekstu przed ani po. Zacznij odpowiedź od {{ i zakończ na }}.
+
 {{
   "title": "tytuł SEO z focus keyword, max 60 znaków",
   "slug": "slug-bez-polskich-znakow",
@@ -111,18 +103,25 @@ Wymagania dla content:
     res.raise_for_status()
 
     raw = res.json()["content"][0]["text"]
+    print(f"[{now()}] 📥 Odpowiedź Claude (pierwsze 200 znaków): {raw[:200]}")
 
-    # Wyciągnij JSON z odpowiedzi
-    import re
+    # Usuń markdown code blocks
+    raw = re.sub(r'```json\s*', '', raw)
+    raw = re.sub(r'```\s*', '', raw)
+    raw = raw.strip()
+
     match = re.search(r'\{[\s\S]*\}', raw)
     if not match:
-        raise ValueError("Claude nie zwrócił poprawnego JSON")
+        raise ValueError(f"Claude nie zwrócił poprawnego JSON. Odpowiedź: {raw[:300]}")
     
-    article = json.loads(match.group(0))
+    try:
+        article = json.loads(match.group(0))
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Błąd parsowania JSON: {e}. Fragment: {match.group(0)[:300]}")
+
     print(f"[{now()}] ✅ Artykuł wygenerowany: {article['title']}")
     return article
 
-# ── PUBLIKUJ NA WORDPRESS ─────────────────────────────
 def publish_to_wordpress(article):
     auth = base64.b64encode(f"{WP_USER}:{WP_PASSWORD}".encode()).decode()
     headers = {
@@ -130,7 +129,6 @@ def publish_to_wordpress(article):
         "Content-Type": "application/json",
     }
 
-    # Utwórz wpis
     print(f"[{now()}] 📤 Publikuję na WordPress ({WP_URL})...")
     body = {
         "title":      article["title"],
@@ -147,16 +145,15 @@ def publish_to_wordpress(article):
     post_id = post["id"]
     print(f"[{now()}] ✅ Wpis utworzony (ID: {post_id})")
 
-    # Ustaw Rank Math meta
     print(f"[{now()}] 🏷️  Ustawiam Rank Math SEO...")
     meta = {
         "meta": {
-            "rank_math_focus_keyword":       article.get("focus_keyword", ""),
-            "rank_math_description":          article.get("meta_description", ""),
-            "rank_math_title":                article["title"] + " — DirectWebs",
-            "rank_math_robots":               ["index", "follow"],
-            "rank_math_rich_snippet":         "article",
-            "rank_math_snippet_article_type": "BlogPosting",
+            "rank_math_focus_keyword":        article.get("focus_keyword", ""),
+            "rank_math_description":           article.get("meta_description", ""),
+            "rank_math_title":                 article["title"] + " — DirectWebs",
+            "rank_math_robots":                ["index", "follow"],
+            "rank_math_rich_snippet":          "article",
+            "rank_math_snippet_article_type":  "BlogPosting",
         }
     }
     requests.post(f"{WP_URL}/wp-json/wp/v2/posts/{post_id}", headers=headers, json=meta)
@@ -164,11 +161,9 @@ def publish_to_wordpress(article):
 
     return post_id, post.get("link", "")
 
-# ── UTILS ─────────────────────────────────────────────
 def now():
     return datetime.now().strftime("%H:%M:%S")
 
-# ── MAIN ──────────────────────────────────────────────
 def main():
     print(f"\n{'='*50}")
     print(f"DirectWebs Auto SEO Poster — {datetime.now().strftime('%Y-%m-%d %H:%M')}")
@@ -179,7 +174,6 @@ def main():
     print(f"[{now()}] ✅ Wybrano: {kw_data['focus']}")
 
     article = generate_article(kw_data)
-
     post_id, post_url = publish_to_wordpress(article)
 
     print(f"\n{'='*50}")
