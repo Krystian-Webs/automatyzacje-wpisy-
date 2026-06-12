@@ -39,6 +39,8 @@ PORTFOLIO_SITES = [
     {"url": "https://regeneracja-turbo.eu", "name": "Regeneracja Turbo", "desc": "serwis turbosprężarek"},
     {"url": "https://kantorfloren.pl", "name": "Kantorfloren", "desc": "strona internetowa"},
     {"url": "https://klodzkieszlaki.pl", "name": "Kłodzkie Szlaki", "desc": "turystyka i szlaki"},
+    {"url": "https://abmmarket.pl", "name": "ABM Market", "desc": "dystrybucja wody Staropolanka, sklep WooCommerce"},
+    {"url": "https://snugy.pl", "name": "Snugy", "desc": "sklep z materacami online"},
 ]
 
 EXTERNAL_LINKS = [
@@ -334,6 +336,32 @@ def set_rank_math_seo(post_id, keywords, title, description):
     except Exception as e:
         print(f"[{now()}] Blad Rank Math: {e}")
 
+def extract_faq_schema(html_content):
+    """Wyciaga sekcje FAQ (h3 = pytanie, kolejne <p> = odpowiedz) i tworzy FAQPage schema."""
+    faq_match = re.search(r'<h2[^>]*id="faq"[^>]*>.*?</h2>(.*?)(?=<h2|$)', html_content, re.DOTALL | re.IGNORECASE)
+    if not faq_match:
+        return None
+
+    faq_html = faq_match.group(1)
+    pairs = re.findall(r'<h3[^>]*>(.*?)</h3>\s*((?:<p[^>]*>.*?</p>\s*)+)', faq_html, re.DOTALL | re.IGNORECASE)
+
+    main_entity = []
+    for question, answer_html in pairs:
+        question_clean = re.sub(r'<[^>]+>', '', question).strip()
+        answer_text = ' '.join(re.findall(r'<p[^>]*>(.*?)</p>', answer_html, re.DOTALL | re.IGNORECASE))
+        answer_clean = re.sub(r'<[^>]+>', '', answer_text).strip()
+        if question_clean and answer_clean:
+            main_entity.append({
+                "@type": "Question",
+                "name": question_clean,
+                "acceptedAnswer": {"@type": "Answer", "text": answer_clean}
+            })
+
+    if not main_entity:
+        return None
+
+    return {"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": main_entity}
+
 def generate_article(kw_data, blog_posts, images):
     focus    = kw_data["focus"]
     related  = kw_data.get("related", [])
@@ -411,6 +439,12 @@ WAZNE: uzyj "{focus}" 15-20 razy, krotkie akapity, <strong> dla pojec"""
 
     content = claude_request(content_prompt, 8000)
     print(f"[{now()}] Tresc OK, {len(content)} znakow")
+
+    # KROK 3: Wyciagnij FAQ i wygeneruj schema FAQPage
+    faq_schema = extract_faq_schema(content)
+    if faq_schema:
+        content += f'\n<script type="application/ld+json">{json.dumps(faq_schema, ensure_ascii=False)}</script>\n'
+        print(f"[{now()}] FAQPage schema OK ({len(faq_schema['mainEntity'])} pytan)")
 
     return {
         "title": meta["title"],
