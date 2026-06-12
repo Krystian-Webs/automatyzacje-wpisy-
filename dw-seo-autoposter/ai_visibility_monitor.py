@@ -35,6 +35,14 @@ BRAND = "directwebs"
 def now():
     return datetime.now().strftime("%H:%M:%S")
 
+def sanitize(text):
+    """Usuwa klucze API z tekstu zanim trafi do logu."""
+    if OPENAI_KEY:
+        text = text.replace(OPENAI_KEY, "***")
+    if GEMINI_KEY:
+        text = text.replace(GEMINI_KEY, "***")
+    return text
+
 def analyze_site_gemini():
     """Prosi Gemini o ocene jak DirectWebs prezentuje sie jako ekspert (na podstawie wiedzy/web)."""
     if not GEMINI_KEY:
@@ -55,7 +63,7 @@ def analyze_site_gemini():
         end = text.rfind('}') + 1
         return json.loads(text[start:end])
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": sanitize(str(e))}
 
 def check_openai(question):
     if not OPENAI_KEY:
@@ -76,7 +84,7 @@ def check_openai(question):
         mentioned = BRAND in text.lower()
         return {"mentioned": mentioned, "response_excerpt": text[:400]}
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": sanitize(str(e))}
 
 def check_gemini(question):
     if not GEMINI_KEY:
@@ -92,7 +100,7 @@ def check_gemini(question):
         mentioned = BRAND in text.lower()
         return {"mentioned": mentioned, "response_excerpt": text[:400]}
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": sanitize(str(e))}
 
 def main():
     print(f"\n{'='*50}")
