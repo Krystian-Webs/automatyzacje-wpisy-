@@ -17,18 +17,31 @@ GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "")
 LOG_FILE = "ai_visibility_log.json"
 
 QUESTIONS = [
-    "Polecane agencje tworzenia stron internetowych w Polsce",
-    "Kto robi strony WordPress i sklepy WooCommerce dla małych firm w Polsce?",
-    "Jak wybrać firmę do stworzenia strony internetowej i sklepu online?",
-    "Co to jest DirectWebs?",
+    # Lokalnie — Kotlina Kłodzka
+    {"q": "Kto robi strony internetowe w Kłodzku i Kotlinie Kłodzkiej?", "tier": "lokalnie"},
+    {"q": "Agencja webdesign Kłodzko - kogo polecacie?", "tier": "lokalnie"},
+    {"q": "Firma do stworzenia strony internetowej Kotlina Kłodzka", "tier": "lokalnie"},
+
+    # Regionalnie — Dolny Śląsk
+    {"q": "Polecane agencje tworzenia stron internetowych na Dolnym Śląsku", "tier": "regionalnie"},
+    {"q": "Kto robi sklepy WooCommerce na Dolnym Śląsku?", "tier": "regionalnie"},
+
+    # Krajowo — Polska
+    {"q": "Polecane agencje tworzenia stron internetowych w Polsce", "tier": "krajowo"},
+    {"q": "Kto robi strony WordPress i sklepy WooCommerce dla małych firm w Polsce?", "tier": "krajowo"},
+    {"q": "Jak wybrać firmę do stworzenia strony internetowej i sklepu online?", "tier": "krajowo"},
+
+    # Brand
+    {"q": "Co to jest DirectWebs?", "tier": "brand"},
+    {"q": "DirectWebs opinie", "tier": "brand"},
 ]
 
-ANALYSIS_PROMPT = """Przeanalizuj strone internetowa firmy DirectWebs (directwebs.pl) ktora oferuje tworzenie stron WordPress i sklepow WooCommerce, SEO, grafike i marketing w social media.
+ANALYSIS_PROMPT = """Przeanalizuj strone internetowa firmy DirectWebs (directwebs.pl) ktora oferuje tworzenie stron WordPress i sklepow WooCommerce, SEO, grafike i marketing w social media. Firma dziala z Kotliny Klodzkiej (Dolny Slask, Polska) i chce byc widoczna lokalnie (Kotlina Klodzka), regionalnie (Dolny Slask) i krajowo (Polska) w wyszukiwarkach i AI.
 
 Zwroc TYLKO JSON bez tekstu przed/po:
-{"score": liczba 0-100 jak dobrze ta firma prezentuje sie jako ekspert w AI/wyszukiwarkach,
+{"score": liczba 0-100 jak dobrze ta firma prezentuje sie jako lokalny ekspert w AI/wyszukiwarkach,
  "strengths": ["max 3 krotkie punkty co dziala dobrze"],
- "improvements": ["max 3 krotkie konkretne rekomendacje co poprawic pod AI/SEO"]}"""
+ "improvements": ["max 3 krotkie konkretne rekomendacje co poprawic pod lokalne AI/SEO (Kotlina Klodzka, Dolny Slask)"]}"""
 
 BRAND = "directwebs"
 
@@ -109,9 +122,10 @@ def main():
 
     results = {"date": datetime.now().strftime("%Y-%m-%d"), "checks": []}
 
-    for q in QUESTIONS:
-        print(f"[{now()}] Pytanie: {q}")
-        entry = {"question": q}
+    for item in QUESTIONS:
+        q, tier = item["q"], item["tier"]
+        print(f"[{now()}] [{tier}] Pytanie: {q}")
+        entry = {"question": q, "tier": tier}
 
         gpt = check_openai(q)
         if gpt:
