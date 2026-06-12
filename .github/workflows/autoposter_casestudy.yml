@@ -1,0 +1,44 @@
+name: DirectWebs Case Study Poster
+
+on:
+  schedule:
+    - cron: '0 8 * * 1'  # poniedzialek 8:00 UTC
+  workflow_dispatch:
+
+jobs:
+  post-casestudy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - run: pip install requests google-auth google-api-python-client
+
+      - name: Restore state
+        uses: actions/cache@v4
+        with:
+          path: dw-seo-autoposter/casestudy_state.json
+          key: casestudy-state
+
+      - name: Run case study poster
+        env:
+          WP_URL: ${{ secrets.WP_URL }}
+          WP_USER: ${{ secrets.WP_USER }}
+          WP_PASSWORD: ${{ secrets.WP_PASSWORD }}
+          CLAUDE_KEY: ${{ secrets.CLAUDE_KEY }}
+          WP_CATEGORY_ID: ${{ secrets.WP_CATEGORY_ID }}
+          GSC_SERVICE_ACCOUNT: ${{ secrets.GSC_SERVICE_ACCOUNT }}
+        run: |
+          cd dw-seo-autoposter
+          python post_casestudy.py
+
+      - name: Commit state
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add dw-seo-autoposter/casestudy_state.json
+          git commit -m "Update case study rotation state" || echo "No changes"
+          git push
