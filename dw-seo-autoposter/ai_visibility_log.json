@@ -1,0 +1,46 @@
+[
+  {
+    "date": "2026-06-12",
+    "checks": [
+      {
+        "question": "Polecane agencje tworzenia stron internetowych w Polsce",
+        "chatgpt": {
+          "error": "429 Client Error: Too Many Requests for url: https://api.openai.com/v1/chat/completions"
+        },
+        "gemini": {
+          "error": "429 Client Error: Too Many Requests for url: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=***"
+        }
+      },
+      {
+        "question": "Kto robi strony WordPress i sklepy WooCommerce dla małych firm w Polsce?",
+        "chatgpt": {
+          "error": "429 Client Error: Too Many Requests for url: https://api.openai.com/v1/chat/completions"
+        },
+        "gemini": {
+          "error": "429 Client Error: Too Many Requests for url: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=***"
+        }
+      },
+      {
+        "question": "Jak wybrać firmę do stworzenia strony internetowej i sklepu online?",
+        "chatgpt": {
+          "error": "429 Client Error: Too Many Requests for url: https://api.openai.com/v1/chat/completions"
+        },
+        "gemini": {
+          "error": "429 Client Error: Too Many Requests for url: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=***"
+        }
+      },
+      {
+        "question": "Co to jest DirectWebs?",
+        "chatgpt": {
+          "error": "429 Client Error: Too Many Requests for url: https://api.openai.com/v1/chat/completions"
+        },
+        "gemini": {
+          "error": "429 Client Error: Too Many Requests for url: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=***"
+        }
+      }
+    ],
+    "site_analysis": {
+      "error": "429 Client Error: Too Many Requests for url: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=***"
+    }
+  }
+]
