@@ -1,0 +1,34 @@
+name: DirectWebs AI Visibility Monitor
+
+on:
+  schedule:
+    - cron: '0 9 * * 1'  # poniedzialek 9:00 UTC
+  workflow_dispatch:
+
+jobs:
+  ai-monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - run: pip install requests
+
+      - name: Run AI visibility monitor
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          cd dw-seo-autoposter
+          python ai_visibility_monitor.py
+
+      - name: Commit log
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add dw-seo-autoposter/ai_visibility_log.json
+          git commit -m "Update AI visibility log" || echo "No changes"
+          git push
