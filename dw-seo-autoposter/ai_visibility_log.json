@@ -1230,5 +1230,113 @@
     "site_analysis": {
       "error": "429 Client Error: Too Many Requests for url: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=***"
     }
+  },
+  {
+    "date": "2026-08-17",
+    "checks": [
+      {
+        "question": "Kto robi strony internetowe w Kłodzku i Kotlinie Kłodzkiej?",
+        "tier": "lokalnie",
+        "chatgpt": {
+          "error": "429 Client Error: Too Many Requests for url: https://api.openai.com/v1/chat/completions"
+        },
+        "gemini": {
+          "error": "404 Client Error: Not Found for url: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=***"
+        }
+      },
+      {
+        "question": "Agencja webdesign Kłodzko - kogo polecacie?",
+        "tier": "lokalnie",
+        "chatgpt": {
+          "error": "429 Client Error: Too Many Requests for url: https://api.openai.com/v1/chat/completions"
+        },
+        "gemini": {
+          "error": "404 Client Error: Not Found for url: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=***"
+        }
+      },
+      {
+        "question": "Firma do stworzenia strony internetowej Kotlina Kłodzka",
+        "tier": "lokalnie",
+        "chatgpt": {
+          "error": "429 Client Error: Too Many Requests for url: https://api.openai.com/v1/chat/completions"
+        },
+        "gemini": {
+          "error": "404 Client Error: Not Found for url: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=***"
+        }
+      },
+      {
+        "question": "Polecane agencje tworzenia stron internetowych na Dolnym Śląsku",
+        "tier": "regionalnie",
+        "chatgpt": {
+          "error": "429 Client Error: Too Many Requests for url: https://api.openai.com/v1/chat/completions"
+        },
+        "gemini": {
+          "error": "404 Client Error: Not Found for url: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=***"
+        }
+      },
+      {
+        "question": "Kto robi sklepy WooCommerce na Dolnym Śląsku?",
+        "tier": "regionalnie",
+        "chatgpt": {
+          "error": "429 Client Error: Too Many Requests for url: https://api.openai.com/v1/chat/completions"
+        },
+        "gemini": {
+          "error": "404 Client Error: Not Found for url: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=***"
+        }
+      },
+      {
+        "question": "Polecane agencje tworzenia stron internetowych w Polsce",
+        "tier": "krajowo",
+        "chatgpt": {
+          "error": "429 Client Error: Too Many Requests for url: https://api.openai.com/v1/chat/completions"
+        },
+        "gemini": {
+          "error": "404 Client Error: Not Found for url: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=***"
+        }
+      },
+      {
+        "question": "Kto robi strony WordPress i sklepy WooCommerce dla małych firm w Polsce?",
+        "tier": "krajowo",
+        "chatgpt": {
+          "error": "429 Client Error: Too Many Requests for url: https://api.openai.com/v1/chat/completions"
+        },
+        "gemini": {
+          "error": "404 Client Error: Not Found for url: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=***"
+        }
+      },
+      {
+        "question": "Jak wybrać firmę do stworzenia strony internetowej i sklepu online?",
+        "tier": "krajowo",
+        "chatgpt": {
+          "error": "429 Client Error: Too Many Requests for url: https://api.openai.com/v1/chat/completions"
+        },
+        "gemini": {
+          "error": "404 Client Error: Not Found for url: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=***"
+        }
+      },
+      {
+        "question": "Co to jest DirectWebs?",
+        "tier": "brand",
+        "chatgpt": {
+          "error": "429 Client Error: Too Many Requests for url: https://api.openai.com/v1/chat/completions"
+        },
+        "gemini": {
+          "error": "404 Client Error: Not Found for url: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=***"
+        }
+      },
+      {
+        "question": "DirectWebs opinie",
+        "tier": "brand",
+        "chatgpt": {
+          "error": "429 Client Error: Too Many Requests for url: https://api.openai.com/v1/chat/completions"
+        },
+        "gemini": {
+          "error": "404 Client Error: Not Found for url: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=***"
+        }
+      }
+    ],
+    "site_analysis": {
+      "error": "404 Client Error: Not Found for url: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=***"
+    }
   }
 ]
